@@ -1,4 +1,4 @@
-/*	$OpenBSD: theo.c,v 1.121 2011/07/08 00:27:59 djm Exp $	*/
+/*	$OpenBSD: theo.c,v 1.143 2014/11/19 21:22:47 schwarze Exp $	*/
 /*
  * Copyright (c) 2002 Artur Grabowski <art@openbsd.org>
  * All rights reserved.
@@ -82,6 +82,8 @@ theo(int f, int n)
 
 	curbp = bp;
 	curwp = wp;
+	onlywind(f, n);
+
 	return (TRUE);
 }
 
