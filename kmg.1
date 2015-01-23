@@ -1,14 +1,14 @@
-.\"	$OpenBSD: mg.1,v 1.55 2011/09/02 02:37:52 lum Exp $
+.\"	$OpenBSD: mg.1,v 1.88 2014/04/02 20:32:00 lum Exp $
 .\" This file is in the public domain.
 .\"
-.Dd $Mdocdate: September 5 2011 $
-.Dt MG 1
+.Dd $Mdocdate: April 2 2014 $
+.Dt KMG 1
 .Os
 .Sh NAME
-.Nm mg
+.Nm kmg
 .Nd emacs-like text editor
 .Sh SYNOPSIS
-.Nm mg
+.Nm kmg
 .Op Fl n
 .Op Fl f Ar mode
 .Op + Ns Ar number
@@ -51,6 +51,13 @@ At present, windows may only be split horizontally, so each window is
 delineated by a modeline at the bottom.
 If changes are made to a buffer, it will be reflected in all open windows.
 .Pp
+If a file is changed outside
+.Nm
+and its buffer is about to be changed,
+.Nm
+prompts if the change should go ahead (y), not go ahead (n) or if the buffer
+should be reverted (r) to the latest file on disk.
+.Pp
 If a buffer name begins and ends with an asterisk, the buffer is considered
 throwaway; i.e. the user will not be prompted to save changes when
 the buffer is killed.
@@ -73,19 +80,66 @@ the mark at the point of deletion.
 Note: The point and mark are window-specific in
 .Nm ,
 not buffer-specific, as in other emacs flavours.
+.Sh BACKUP FILES
+Backup files have a
+.Sq ~
+character appended to the file name and
+are created in the current working directory by default.
+Whether to create backup files or not can be toggled with the
+make-backup-file command.
+The backup file location can either be in the current
+working directory, or all backups can be moved to a
+.Pa ~/.kmg.d
+directory where files retain their path name to retain uniqueness.
+Use the backup-to-home-directory to alternate between these two locations.
+Further, if any application creates backup files in the
+.Ev TMPDIR ,
+these can be left with the leave-tmpdir-backups command.
+.Sh TAGS
+.Nm
+supports tag files created by
+.Xr ctags 1 ,
+allowing the user to quickly locate various object definitions.
+Note though that emacs uses etags, not ctags.
+.Sh CSCOPE
+.Nm
+supports navigating source code using cscope.
+However,
+.Nm
+requires cscope and cscope-indexer executables to be present in
+.Ev PATH
+for it to work.
 .Sh DEFAULT KEY BINDINGS
 Normal editing commands are very similar to GNU Emacs.
 In the following examples, C-x means Control-x, and M-x means Meta-x,
 where the Meta key may be either a special key on the keyboard
 or the ALT key; otherwise ESC followed by the key X works as well.
 .Pp
-.Bl -tag -width xxxxxxxxxx -compact
+.Bl -tag -width xxxxxxxxxxxx -offset indent -compact
 .It C-SPC
 set-mark-command
 .It C-a
 beginning-of-line
 .It C-b
 backward-char
+.It C-c s c
+cscope-find-functions-calling-this-function
+.It C-c s d
+cscope-find-global-definition
+.It C-c s e
+cscope-find-egrep-pattern
+.It C-c s f
+cscope-find-this-file
+.It C-c s i
+cscope-find-files-including-file
+.It C-c s n
+cscope-next-symbol
+.It C-c s p
+cscope-prev-symbol
+.It C-c s s
+cscope-find-this-symbol
+.It C-c s t
+cscope-find-this-text-string
 .It C-d
 delete-char
 .It C-e
@@ -190,6 +244,8 @@ call-last-kbd-macro
 set-fill-column
 .It C-x g
 goto-line
+.It C-x h
+mark-whole-buffer
 .It C-x i
 insert-file
 .It C-x k
@@ -212,6 +268,12 @@ suspend-emacs
 scroll-other-window
 .It M-SPC
 just-one-space
+.It M-!
+shell-command
+.It M-.
+find-tag
+.It M-*
+pop-tag-mark
 .It M-%
 query-replace
 .It M-<
@@ -250,6 +312,8 @@ copy-region-as-kill
 execute-extended-command
 .It M-{
 backward-paragraph
+.It M-|
+shell-command-on-region
 .It M-}
 forward-paragraph
 .It M-~
@@ -267,10 +331,10 @@ delete-backward-char
 For a complete description of
 .Nm
 commands, see
-.Sx MG COMMANDS .
+.Sx KMG COMMANDS .
 To see the active keybindings at any time, type
 .Dq M-x describe-bindings .
-.Sh MG COMMANDS
+.Sh KMG COMMANDS
 Commands are invoked by
 .Dq M-x ,
 or by binding to a key.
@@ -280,7 +344,7 @@ This parameter is set either by
 M-<n> (where
 .Va n
 is the numerical argument) before the command, or by
-one or more invocations of the universal argument, usually bound to C-U.
+one or more invocations of the universal argument, usually bound to C-u.
 When invoked in this manner, the value of the numeric parameter to
 be passed is displayed in the minibuffer before the M-x.
 One common use of the parameter is in mode toggles (e.g.\&
@@ -297,6 +361,8 @@ Prompt the user for a string, open the *help* buffer,
 and list all
 .Nm
 commands that contain that string.
+.It audible-bell
+Toggle the audible system bell.
 .It auto-execute
 Register an auto-execute hook; that is, specify a filename pattern
 (conforming to the shell's filename globbing rules) and an associated
@@ -310,6 +376,11 @@ to a new line.
 Toggle indent mode, where indentation is preserved after a newline.
 .It back-to-indentation
 Move the dot to the first non-whitespace character on the current line.
+.It backup-to-home-directory
+Save backup copies to a
+.Pa ~/.kmg.d
+directory instead of working directory.
+Requires make-backup-files to be on.
 .It backward-char
 Move cursor backwards one character.
 .It backward-kill-word
@@ -329,12 +400,12 @@ Move cursor to the top of the buffer.
 Move cursor to the beginning of the line.
 .It blink-and-insert
 Self-insert a character, then search backwards and blink its
-matching delimeter.
-For delimeters other than
+matching delimiter.
+For delimiters other than
 parenthesis, brackets, and braces, the character itself
 is used as its own match.
 .It bsmap-mode
-Toggle bsmap mode, where DEL and c-H are swapped.
+Toggle bsmap mode, where DEL and C-h are swapped.
 .It c-mode
 Toggle a KNF-compliant mode for editing C program files.
 .It call-last-kbd-macro
@@ -347,6 +418,8 @@ upper case, and subsequent letters to lower case.
 .It cd
 Change the global working directory.
 See also global-wd-mode.
+.It column-number-mode
+Toggle whether the column number is displayed in the modeline.
 .It copy-region-as-kill
 Copy all of the characters in the region to the kill buffer,
 clearing the mark afterwards.
@@ -355,6 +428,32 @@ This is a bit like a kill-region followed by a yank.
 Count the number of lines matching the supplied regular expression.
 .It count-non-matches
 Count the number of lines not matching the supplied regular expression.
+.It cscope-find-this-symbol
+List the matches for the given symbol.
+.It cscope-find-global-definition
+List global definitions for the given literal.
+.It cscope-find-called-functions
+List functions called from the given function.
+.It cscope-find-functions-calling-this-function
+List functions calling the given function.
+.It cscope-find-this-text-string
+List locations matching the given text string.
+.It cscope-find-egrep-pattern
+List locations matching the given extended regular expression pattern.
+.It cscope-find-this-file
+List filenames matching the given filename.
+.It cscope-find-files-including-file
+List files that #include the given filename.
+.It cscope-next-symbol
+Navigate to the next match.
+.It cscope-prev-symbol
+Navigate to the previous match.
+.It cscope-next-file
+Navigate to the next file.
+.It cscope-prev-file
+Navigate to the previous file.
+.It cscope-create-list-of-files-to-index
+Create cscope's List and Index in the given directory.
 .It define-key
 Prompts the user for a named keymap (mode),
 a key, and an
@@ -400,6 +499,8 @@ the *help* buffer.
 .It describe-key-briefly
 Read a key from the keyboard, and look it up in the keymap.
 Display the name of the function currently bound to the key.
+.It diff-buffer-with-file
+View the differences between buffer and its associated file.
 .It digit-argument
 Process a numerical argument for keyboard-invoked functions.
 .It downcase-region
@@ -461,6 +562,8 @@ If the kill fails, or is aborted, revert to the original file.
 .It find-file-other-window
 Opens the specified file in a second buffer.
 Splits the current window if necessary.
+.It find-tag
+Jump to definition of tag at dot.
 .It forward-char
 Move cursor forwards (or backwards, if
 .Va n
@@ -547,8 +650,15 @@ Kill the currently defined region.
 Delete forward
 .Va n
 words.
+.It leave-tmpdir-backups
+Modifies the behaviour of backup-to-home-directory.
+Backup files that would normally reside in the system
+.Ev TMPDIR
+are left there and not moved to the
+.Pa ~/.kmg.d
+directory.
 .It line-number-mode
-Toggle whether line and column numbers are displayed in the modeline.
+Toggle whether the line number is displayed in the modeline.
 .It list-buffers
 Display the list of available buffers.
 .It load
@@ -560,6 +670,11 @@ Bind a key mapping in the local (topmost) mode.
 Unbind a key mapping in the local (topmost) mode.
 .It make-backup-files
 Toggle generation of backup files.
+.It make-directory
+Prompt the user for a path or directory name which is then created.
+.It mark-whole-buffer
+Marks whole buffer as a region by putting dot at the beginning and mark
+at the end of buffer.
 .It meta-key-mode
 When disabled, the meta key can be used to insert extended-ascii (8-bit)
 characters.
@@ -606,6 +721,8 @@ This command makes the previous (up the screen) window the
 current window.
 There are no errors, although the command does not do
 a lot if there is only 1 window.
+.It pop-tag-mark
+Return to position where find-tag was previously invoked.
 .It push-shell
 Suspend
 .Nm
@@ -652,6 +769,8 @@ is negative, it is that line from the bottom.
 .It redraw-display
 Refresh the display.
 Recomputes all window sizes in case something has changed.
+.It revert-buffer
+Revert the current buffer to the latest file on disk.
 .It save-buffer
 Save the contents of the current buffer if it has been changed,
 optionally creating a backup copy.
@@ -706,7 +825,7 @@ characters, if not found, print a message.
 .It self-insert-command
 Insert a character.
 .It set-case-fold-search
-Set case-fold searching, causing case nopt to matter
+Set case-fold searching, causing case not to matter
 in regular expression searches.
 This is the default.
 .It set-default-mode
@@ -720,6 +839,10 @@ Used by auto-fill-mode.
 Sets the mark in the current window to the current dot location.
 .It set-prefix-string
 Sets the prefix string to be used by the 'prefix-region' command.
+.It shell-command
+Execute external command from mini-buffer.
+.It shell-command-on-region
+Provide the text in region to the shell command as input.
 .It shrink-window
 Shrink current window by one line.
 The window immediately below is expanded to pick up the slack.
@@ -744,11 +867,9 @@ Switch to buffer in another window.
 .It toggle-read-only
 Toggle the read-only flag on the current buffer.
 .It transpose-chars
-Transpose the two characters on either side of dot.
-If dot is at the end of the line, transpose the two characters before it.
-Return with an error if dot is at the beginning of line;
-it seems to be a bit pointless to
-make this work.
+Transpose the two characters in front of and under dot,
+then move forward one character.
+Treat newline characters the same as any other.
 .It undo
 Undo the most recent action.
 If invoked again without an intervening command,
@@ -776,6 +897,11 @@ upper case.
 .It upcase-word
 Move the cursor forward by the specified number of words.
 As it moves, convert any characters to upper case.
+.It visible-bell
+Toggle the visible bell.
+If this toggle is on, the modeline will flash.
+.It visit-tags-table
+Record name of the tags file to be used for subsequent find-tag.
 .It what-cursor-position
 Display a bunch of useful information about the current location of
 dot.
@@ -797,19 +923,101 @@ kill buffer consists only
 of the most recent kill.
 It is not a ring.
 .El
+.Sh KMG DIRED KEY BINDINGS
+Specific key bindings are available in dired mode.
+.Pp
+.Bl -tag -width xxxxxxxxxxxx -offset indent -compact
+.It DEL
+dired-unmark-backward
+.It SPC
+dired-next-line
+.It !
+dired-shell-command
+.It +
+dired-create-directory
+.It c
+dired-do-copy
+.It d and C-d
+dired-flag-file-deletion
+.It e, f and C-m
+dired-find-file
+.It g
+dired-revert
+.It n
+dired-next-line
+.It o
+dired-find-file-other-window
+.It p
+dired-previous-line
+.It q
+quit-window
+.It r
+dired-do-rename
+.It u
+dired-unmark
+.It x
+dired-do-flagged-delete
+.It C-v
+dired-scroll-down
+.It M-v
+dired-scroll-up
+.El
+.Sh KMG DIRED COMMANDS
+The following are a list of the commands specific to dired mode:
+.Bl -tag -width Ds
+.It dired-create-directory
+Create a directory.
+.It dired-do-copy
+Copy the file listed on the current line of the dired buffer.
+.It dired-do-flagged-delete
+Delete the files that have been flagged for deletion.
+.It dired-do-rename
+Rename the file listed on the current line of the dired buffer.
+.It dired-find-file
+Open the file on the current line of the dired buffer.
+If the cursor is on a directory it will be opened in dired mode.
+.It dired-flag-file-deletion
+Flag the file listed on the current line for deletion.
+This is indicated in the buffer by putting a D at the left margin.
+No files are actually deleted until the function dired-do-deletions
+is executed.
+.It dired-find-file-other-window
+Open the file on the current line of the dired buffer in a
+different window.
+.It dired-next-line
+Move the cursor to the next line.
+.It dired-other-window
+This function works just like dired, except that it puts the
+dired buffer in another window.
+.It dired-previous-line
+Move the cursor to the previous line.
+.It dired-revert
+Refresh the dired buffer.
+.It dired-scroll-down
+Scroll down the dired buffer.
+.It dired-scroll-up
+Scroll up the dired buffer.
+.It dired-unmark
+Remove the deletion flag for the file on the current line.
+.It dired-unmark-backward
+Remove the deletion flag from the file listed on the previous line
+of the dired buffer, then move up to that line.
+.It quit-window
+Close the current dired buffer.
+.El
 .Sh CONFIGURATION FILES
 There are two configuration files,
-.Pa .mg ,
+.Pa .kmg
 and
-.Pa .mg-TERM .
+.Pa .kmg-TERM .
 Here,
 .Ev TERM
-represents the name of the terminal type; e.g., if the terminal type
+represents the name of the terminal type; e.g. if the terminal type
 is set to
 .Dq vt100 ,
 .Nm
 will use
-.Pa .mg-vt100
+.Pa .kmg-vt100
 as a startup file.
 The terminal type startup file is used first.
 .Pp
@@ -825,16 +1033,25 @@ set-default-mode fill
 set-fill-column 72
 auto-execute *.c c-mode
 .Ed
+.Pp
+Comments can be added to the startup files by placing
+.Dq \;
+or
+.Dq #
+as the first character of a line.
 .Sh FILES
-.Bl -tag -width /usr/share/doc/mg/tutorial -compact
-.It Pa ~/.mg
+.Bl -tag -width /usr/share/doc/kmg/tutorial -compact
+.It Pa ~/.kmg
 normal startup file
-.It Pa ~/.mg-TERM
+.It Pa ~/.kmg-TERM
 terminal-specific startup file
-.It Pa /usr/share/doc/mg/tutorial
+.It Pa ~/.kmg.d
+alternative backup file location
+.It Pa /usr/share/doc/kmg/tutorial
 concise tutorial
 .El
 .Sh SEE ALSO
+.Xr ctags 1 ,
 .Xr vi 1
 .Sh CAVEATS
 Since it is written completely in C, there is currently no
@@ -846,3 +1063,5 @@ In order to use 8-bit characters (such as German umlauts), the Meta key
 needs to be disabled via the
 .Dq meta-key-mode
 command.
+.Pp
+Multi-byte character sets, such as UTF-8, are not supported.
