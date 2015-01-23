@@ -1,6 +1,22 @@
+This is my personal updates to the mg text editor. It's mostly public
+domain, but some of the source code ported from OpenBSD uses the
+OpenBSD license. 
+
+I started with the 2011 source code in the Ubuntu 14.04 repo, and
+began porting over code until I had M-! and backup-to-home-directory
+working.
+
+Plans for this include C-c g to enable a series of Go functions:
+
+	* C-c g b	go-build
+	* C-c g B	go-build-tree
+	* C-c g i	goimports
+	* C-c g l	golint
+
+The original README follows.
+
 [This is an edited version of the original mg README, updated slightly to
 reflect changes in the last 20 years.]
-
 
 Mg (mg) is a Public Domain EMACS style editor.  It is "broadly"
 compatible with GNU Emacs, the latest creation of Richard M.
