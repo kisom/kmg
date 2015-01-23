@@ -1,4 +1,4 @@
-/*	$OpenBSD: echo.c,v 1.49 2009/06/04 23:39:37 kjell Exp $	*/
+/*	$OpenBSD: echo.c,v 1.56 2014/03/20 07:47:29 lum Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -11,9 +11,7 @@
 
 #include "def.h"
 #include "key.h"
-#ifndef NO_MACRO
 #include "macro.h"
-#endif /* !NO_MACRO */
 
 #include "funmap.h"
 
@@ -56,10 +54,9 @@ eyorn(const char *sp)
 {
 	int	 s;
 
-#ifndef NO_MACRO
 	if (inmacro)
 		return (TRUE);
-#endif /* !NO_MACRO */
+
 	ewprintf("%s? (y or n) ", sp);
 	for (;;) {
 		s = getkey(FALSE);
@@ -75,6 +72,36 @@ eyorn(const char *sp)
 }
 
 /*
+ * Ask a "yes", "no" or "revert" question.  Return ABORT if the user answers
+ * the question with the abort ("^G") character.  Return FALSE for "no",
+ * TRUE for "yes" and REVERT for "revert". No formatting services are
+ * available.  No newline required.
+ */
+int
+eynorr(const char *sp)
+{
+	int	 s;
+
+	if (inmacro)
+		return (TRUE);
+
+	ewprintf("%s? (y, n or r) ", sp);
+	for (;;) {
+		s = getkey(FALSE);
+		if (s == 'y' || s == 'Y' || s == ' ')
+			return (TRUE);
+		if (s == 'n' || s == 'N' || s == CCHR('M'))
+			return (FALSE);
+		if (s == 'r' || s == 'R')
+			return (REVERT);
+		if (s == CCHR('G'))
+			return (ctrlg(FFRAND, 1));
+		ewprintf("Please answer y, n or r.");
+	}
+	/* NOTREACHED */
+}
+
+/*
  * Like eyorn, but for more important questions.  User must type all of
  * "yes" or "no" and the trailing newline.
  */
@@ -83,17 +110,15 @@ eyesno(const char *sp)
 {
 	char	 buf[64], *rep;
 
-#ifndef NO_MACRO
 	if (inmacro)
 		return (TRUE);
-#endif /* !NO_MACRO */
+
 	rep = eread("%s? (yes or no) ", buf, sizeof(buf),
 	    EFNUL | EFNEW | EFCR, sp);
 	for (;;) {
 		if (rep == NULL)
 			return (ABORT);
 		if (rep[0] != '\0') {
-#ifndef NO_MACRO
 			if (macrodef) {
 				struct line	*lp = maclcur;
 
@@ -101,7 +126,6 @@ eyesno(const char *sp)
 				maclcur->l_fp = lp->l_fp;
 				free(lp);
 			}
-#endif /* !NO_MACRO */
 			if ((rep[0] == 'y' || rep[0] == 'Y') &&
 			    (rep[1] == 'e' || rep[1] == 'E') &&
 			    (rep[2] == 's' || rep[2] == 'S') &&
@@ -158,7 +182,6 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 
 	static char emptyval[] = "";	/* XXX hackish way to return err msg*/
 
-#ifndef NO_MACRO
 	if (inmacro) {
 		if (dynbuf) {
 			if ((buf = malloc(maclcur->l_used + 1)) == NULL)
@@ -170,7 +193,6 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 		maclcur = maclcur->l_fp;
 		return (buf);
 	}
-#endif /* !NO_MACRO */
 	epos = cpos = 0;
 	ml = mr = esc = 0;
 	cplflag = FALSE;
@@ -192,7 +214,7 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 	ttflush();
 	for (;;) {
 		c = getkey(FALSE);
-		if ((flag & EFAUTO) != 0 && (c == ' ' || c == CCHR('I'))) {
+		if ((flag & EFAUTO) != 0 && c == CCHR('I')) {
 			if (cplflag == TRUE) {
 				complt_list(flag, buf, cpos);
 				cwin = TRUE;
@@ -246,7 +268,6 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 		case CCHR('D'):
 			if (cpos != epos) {
 				tteeol();
-				y = buf[cpos];
 				epos--;
 				rr = ttrow;
 				cc = ttcol;
@@ -295,6 +316,7 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 					nbuf = newsize;
 				}
 				if (!dynbuf && epos + 1 >= nbuf) {
+					dobeep();
 					ewprintf("Line too long");
 					return (emptyval);
 				}
@@ -344,7 +366,6 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 				ttputc(CCHR('M'));
 				ttflush();
 			}
-#ifndef NO_MACRO
 			if (macrodef) {
 				struct line	*lp;
 
@@ -356,7 +377,6 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 				maclcur = lp;
 				bcopy(buf, lp->l_text, cpos);
 			}
-#endif /* !NO_MACRO */
 			ret = buf;
 			goto done;
 		case CCHR('G'):			/* bell, abort */
@@ -452,6 +472,7 @@ veread(const char *fp, char *buf, size_t nbuf, int flag, va_list ap)
 				nbuf = newsize;
 			}
 			if (!dynbuf && epos + 1 >= nbuf) {
+				dobeep();
 				ewprintf("Line too long");
 				return (emptyval);
 			}
@@ -485,6 +506,7 @@ done:
 memfail:
 	if (dynbuf && buf)
 		free(buf);
+	dobeep();
 	ewprintf("Out of memory");
 	return (emptyval);
 }
@@ -690,8 +712,10 @@ complt_list(int flags, char *buf, int cpos)
 	 * it fills, and then put into the help buffer.
 	 */
 	linesize = MAX(ncol, maxwidth) + 1;
-	if ((linebuf = malloc(linesize)) == NULL)
+	if ((linebuf = malloc(linesize)) == NULL) {
+		free_file_list(wholelist);
 		return (FALSE);
+	}
 	width = 0;
 
 	/*
@@ -735,7 +759,7 @@ complt_list(int flags, char *buf, int cpos)
 	free_file_list(wholelist);
 	popbuftop(bp, WEPHEM);	/* split the screen and put up the help
 				 * buffer */
-	update();		/* needed to make the new stuff actually
+	update(CMODE);		/* needed to make the new stuff actually
 				 * appear */
 	ttmove(oldrow, oldcol);	/* update leaves cursor in arbitrary place */
 	ttcolor(oldhue);	/* with arbitrary color */
@@ -779,10 +803,9 @@ ewprintf(const char *fmt, ...)
 {
 	va_list	 ap;
 
-#ifndef NO_MACRO
 	if (inmacro)
 		return;
-#endif /* !NO_MACRO */
+
 	va_start(ap, fmt);
 	ttcolor(CTEXT);
 	ttmove(nrow - 1, 0);

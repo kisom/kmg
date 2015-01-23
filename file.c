@@ -1,4 +1,4 @@
-/*	$OpenBSD: file.c,v 1.76 2011/08/31 08:58:29 lum Exp $	*/
+/*	$OpenBSD: file.c,v 1.95 2014/04/09 20:50:03 florian Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -7,6 +7,8 @@
  */
 
 #include "def.h"
+
+#include <sys/stat.h>
 
 #include <libgen.h>
 
@@ -169,33 +171,6 @@ poptofile(int f, int n)
 }
 
 /*
- * Given a file name, either find the buffer it uses, or create a new
- * empty buffer to put it in.
- */
-struct buffer *
-findbuffer(char *fn)
-{
-	struct buffer	*bp;
-	char		bname[NBUFN], fname[NBUFN];
-
-	if (strlcpy(fname, fn, sizeof(fname)) >= sizeof(fname)) {
-		ewprintf("filename too long");
-		return (NULL);
-	}
-
-	for (bp = bheadp; bp != NULL; bp = bp->b_bufp) {
-		if (strcmp(bp->b_fname, fname) == 0)
-			return (bp);
-	}
-	/* Not found. Create a new one, adjusting name first */
-	if (augbname(bname, fname, sizeof(bname)) == FALSE)
-		return (NULL);
-
-	bp = bfind(bname, TRUE);
-	return (bp);
-}
-
-/*
  * Read the file "fname" into the current buffer.  Make all of the text
  * in the buffer go away, after checking for unsaved changes.  This is
  * called by the "read" command, the "visit" command, and the mainline
@@ -205,8 +180,10 @@ int
 readin(char *fname)
 {
 	struct mgwin	*wp;
+	struct stat	 statbuf;
 	int	 status, i, ro = FALSE;
 	PF	*ael;
+	char	 dp[NFILEN];
 
 	/* might be old */
 	if (bclear(curbp) != TRUE)
@@ -214,18 +191,17 @@ readin(char *fname)
 	/* Clear readonly. May be set by autoexec path */
 	curbp->b_flag &= ~BFREADONLY;
 	if ((status = insertfile(fname, fname, TRUE)) != TRUE) {
+		dobeep();
 		ewprintf("File is not readable: %s", fname);
 		return (FALSE);
 	}
 
 	for (wp = wheadp; wp != NULL; wp = wp->w_wndp) {
 		if (wp->w_bufp == curbp) {
-			if ((fisdir(fname)) != TRUE) {
-				wp->w_dotp = wp->w_linep = bfirstlp(curbp);
-				wp->w_doto = 0;
-				wp->w_markp = NULL;
-				wp->w_marko = 0;
-				}
+			wp->w_dotp = wp->w_linep = bfirstlp(curbp);
+			wp->w_doto = 0;
+			wp->w_markp = NULL;
+			wp->w_marko = 0;
 		}
 	}
 
@@ -242,13 +218,31 @@ readin(char *fname)
 	curbp->b_flag &= ~BFCHG;
 
 	/*
-	 * We need to set the READONLY flag after we insert the file,
-	 * unless the file is a directory.
+	 * Set the buffer READONLY flag if any of following are true:
+	 *   1. file is a directory.
+	 *   2. file is read-only.
+	 *   3. file doesn't exist and directory is read-only.
 	 */
-	if (access(fname, W_OK) && errno != ENOENT)
+	if (fisdir(fname) == TRUE) {
 		ro = TRUE;
-	if (fisdir(fname) == TRUE)
-		ro = TRUE;
+	} else if ((access(fname, W_OK) == -1)) {
+		if (errno != ENOENT) {
+			ro = TRUE;
+		} else if (errno == ENOENT) {
+			(void)xdirname(dp, fname, sizeof(dp));
+			(void)strlcat(dp, "/", sizeof(dp));
+
+			/* Missing directory; keep buffer rw, like emacs */
+			if (stat(dp, &statbuf) == -1 && errno == ENOENT) {
+				if (eyorn("Missing directory, create") == TRUE)
+					(void)do_makedir(dp);
+			} else if (access(dp, W_OK) == -1 && errno == EACCES) {
+				ewprintf("File not found and directory"
+				    " write-protected");
+				ro = TRUE;
+			}
+		}
+	}
 	if (ro == TRUE)
 		curbp->b_flag |= BFREADONLY;
 
@@ -292,6 +286,7 @@ insertfile(char *fname, char *newname, int replacebuf)
 	int	 nbytes, s, nline = 0, siz, x, x2;
 	int	 opos;			/* offset we started at */
 	int	 oline;			/* original line number */
+        FILE    *ffp;
 
 	if (replacebuf == TRUE)
 		x = undo_enable(FFRAND, 0);
@@ -315,7 +310,8 @@ insertfile(char *fname, char *newname, int replacebuf)
 	}
 
 	/* hard file open */
-	if ((s = ffropen(fname, (replacebuf == TRUE) ? bp : NULL)) == FIOERR)
+	if ((s = ffropen(&ffp, fname, (replacebuf == TRUE) ? bp : NULL))
+	    == FIOERR)
 		goto out;
 	if (s == FIOFNF) {
 		/* file not found */
@@ -327,6 +323,7 @@ insertfile(char *fname, char *newname, int replacebuf)
 	} else if (s == FIODIR) {
 		/* file was a directory */
 		if (replacebuf == FALSE) {
+			dobeep();
 			ewprintf("Cannot insert: file is a directory, %s",
 			    fname);
 			goto cleanup;
@@ -356,7 +353,7 @@ insertfile(char *fname, char *newname, int replacebuf)
 
 	nline = 0;
 	siz = 0;
-	while ((s = ffgetline(line, linesize, &nbytes)) != FIOERR) {
+	while ((s = ffgetline(ffp, line, linesize, &nbytes)) != FIOERR) {
 retry:
 		siz += nbytes + 1;
 		switch (s) {
@@ -390,6 +387,7 @@ retry:
 				newsize = linesize * 2;
 				if (newsize < 0 ||
 				    (cp = malloc(newsize)) == NULL) {
+					dobeep();
 					ewprintf("Could not allocate %d bytes",
 					    newsize);
 						s = FIOERR;
@@ -398,7 +396,7 @@ retry:
 				bcopy(line, cp, linesize);
 				free(line);
 				line = cp;
-				s = ffgetline(line + linesize, linesize,
+				s = ffgetline(ffp, line + linesize, linesize,
 				    &nbytes);
 				nbytes += linesize;
 				linesize = newsize;
@@ -407,6 +405,7 @@ retry:
 				goto retry;
 			}
 		default:
+			dobeep();
 			ewprintf("Unknown code %d reading file", s);
 			s = FIOERR;
 			break;
@@ -414,7 +413,7 @@ retry:
 	}
 endoffile:
 	/* ignore errors */
-	(void)ffclose(NULL);
+	(void)ffclose(ffp, NULL);
 	/* don't zap an error */
 	if (s == FIOEOF) {
 		if (nline == 1)
@@ -491,9 +490,11 @@ cleanup:
 int
 filewrite(int f, int n)
 {
+	struct stat     statbuf;
 	int	 s;
-	char	 fname[NFILEN], bn[NBUFN];
+	char	 fname[NFILEN], bn[NBUFN], tmp[NFILEN + 25];
 	char	*adjfname, *bufp;
+        FILE    *ffp;
 
 	if (getbufcwd(fname, sizeof(fname)) != TRUE)
 		fname[0] = '\0';
@@ -506,9 +507,23 @@ filewrite(int f, int n)
 	adjfname = adjustname(fname, TRUE);
 	if (adjfname == NULL)
 		return (FALSE);
+
+        /* Check if file exists; write checks done later */
+        if (stat(adjfname, &statbuf) == 0) {
+		if (S_ISDIR(statbuf.st_mode)) {
+			dobeep();
+			ewprintf("%s is a directory", adjfname);
+			return (FALSE);
+		}
+		snprintf(tmp, sizeof(tmp), "File `%s' exists; overwrite",
+		    adjfname);
+		if ((s = eyorn(tmp)) != TRUE)
+                        return (s);
+        }
+
 	/* old attributes are no longer current */
 	bzero(&curbp->b_fi, sizeof(curbp->b_fi));
-	if ((s = writeout(curbp, adjfname)) == TRUE) {
+	if ((s = writeout(&ffp, curbp, adjfname)) == TRUE) {
 		(void)strlcpy(curbp->b_fname, adjfname, sizeof(curbp->b_fname));
 		if (getbufcwd(curbp->b_cwd, sizeof(curbp->b_cwd)) != TRUE)
 			(void)strlcpy(curbp->b_cwd, "/", sizeof(curbp->b_cwd));
@@ -518,8 +533,11 @@ filewrite(int f, int n)
 		free(curbp->b_bname);
 		if ((curbp->b_bname = strdup(bn)) == NULL)
 			return (FALSE);
+		(void)fupdstat(curbp);
 		curbp->b_flag &= ~(BFBAK | BFCHG);
 		upmodes(curbp);
+		undo_add_boundary(FFRAND, 1);
+		undo_add_modified();
 	}
 	return (s);
 }
@@ -536,7 +554,10 @@ static int	makebackup = MAKEBACKUP;
 int
 filesave(int f, int n)
 {
-	return (buffsave(curbp));
+	if (curbp->b_fname[0] == '\0')
+		return (filewrite(f, n));
+	else
+		return (buffsave(curbp));
 }
 
 /*
@@ -551,6 +572,7 @@ int
 buffsave(struct buffer *bp)
 {
 	int	 s;
+        FILE    *ffp;
 
 	/* return, no changes */
 	if ((bp->b_flag & BFCHG) == 0) {
@@ -560,6 +582,7 @@ buffsave(struct buffer *bp)
 
 	/* must have a name */
 	if (bp->b_fname[0] == '\0') {
+		dobeep();
 		ewprintf("No file name");
 		return (FALSE);
 	}
@@ -582,9 +605,12 @@ buffsave(struct buffer *bp)
 		    (s = eyesno("Backup error, save anyway")) != TRUE)
 			return (s);
 	}
-	if ((s = writeout(bp, bp->b_fname)) == TRUE) {
+	if ((s = writeout(&ffp, bp, bp->b_fname)) == TRUE) {
+		(void)fupdstat(bp);
 		bp->b_flag &= ~(BFCHG | BFBAK);
 		upmodes(bp);
+		undo_add_boundary(FFRAND, 1);
+		undo_add_modified();
 	}
 	return (s);
 }
@@ -620,27 +646,44 @@ makebkfile(int f, int n)
  * This function performs the details of file writing; writing the file
  * in buffer bp to file fn. Uses the file management routines in the
  * "fileio.c" package. Most of the grief is checking of some sort.
+ * You may want to call fupdstat() after using this function.
  */
 int
-writeout(struct buffer *bp, char *fn)
+writeout(FILE ** ffp, struct buffer *bp, char *fn)
 {
+	struct stat	statbuf;
 	int	 s;
+	char     dp[NFILEN];
 
+	if (stat(fn, &statbuf) == -1 && errno == ENOENT) {
+		errno = 0;
+		(void)xdirname(dp, fn, sizeof(dp));
+		(void)strlcat(dp, "/", sizeof(dp));
+		if (access(dp, W_OK) && errno == EACCES) {
+			dobeep();
+			ewprintf("Directory %s write-protected", dp);
+			return (FIOERR);
+		} else if (errno == ENOENT) {
+   			dobeep();
+			ewprintf("%s: no such directory", dp);
+			return (FIOERR);
+		}
+        }
 	/* open writes message */
-	if ((s = ffwopen(fn, bp)) != FIOSUC)
+	if ((s = ffwopen(ffp, fn, bp)) != FIOSUC)
 		return (FALSE);
-	s = ffputbuf(bp);
+	s = ffputbuf(*ffp, bp);
 	if (s == FIOSUC) {
 		/* no write error */
-		s = ffclose(bp);
+		s = ffclose(*ffp, bp);
 		if (s == FIOSUC)
 			ewprintf("Wrote %s", fn);
 	} else {
 		/* print a message indicating write error */
-		(void)ffclose(bp);
+		(void)ffclose(*ffp, bp);
+		dobeep();
 		ewprintf("Unable to write %s", fn);
 	}
-	(void)fupdstat(bp);
 	return (s == FIOSUC);
 }
 

@@ -1,4 +1,4 @@
-/*	$OpenBSD: kbd.c,v 1.24 2008/06/14 07:38:53 kjell Exp $	*/
+/*	$OpenBSD: kbd.c,v 1.26 2013/05/31 18:03:44 lum Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -9,10 +9,7 @@
 #include "def.h"
 #include "kbd.h"
 #include "key.h"
-
-#ifndef NO_MACRO
 #include "macro.h"
-#endif /* !NO_MACRO */
 
 #ifndef METABIT
 #define METABIT 0x80
@@ -84,7 +81,7 @@ getkey(int flag)
 			/* avoid problems with % */
 			ewprintf("%s", prompt);
 			/* put the cursor back */
-			update();
+			update(CMODE);
 			epresf = KCLEAR;
 		}
 		if (promptp > prompt)
@@ -97,15 +94,6 @@ getkey(int flag)
 	} else
 		c = ttgetc();
 
-#ifdef __CYGWIN__
-	/* Backspace is ^H on Cygwin. Interpreting ^H as ^? is the
-	 * standard way of solving this problem on Cygwin console
-	 * apps. (e.g. emacs-nox in the Cygwin Emacs package. */
-	
-	if (c == CCHR('H'))
-	  c = CCHR('?');
-#endif
-	
 	if (bs_map) {
 		if (c == CCHR('H'))
 			c = CCHR('?');
@@ -169,10 +157,10 @@ doin(void)
 	while ((funct = doscan(curmap, (key.k_chars[key.k_count++] =
 	    getkey(TRUE)), &curmap)) == NULL)
 		/* nothing */;
-#ifndef NO_MACRO
+
 	if (macrodef && macrocount < MAXMACRO)
 		macro[macrocount++].m_funct = funct;
-#endif /* !NO_MACRO */
+
 	return (mgwrap(funct, 0, 1));
 }
 
@@ -201,12 +189,9 @@ rescan(int f, int n)
 					    getkey(TRUE), &curmap)) == NULL)
 						/* nothing */;
 				if (fp != rescan) {
-#ifndef NO_MACRO
 					if (macrodef && macrocount <= MAXMACRO)
 						macro[macrocount - 1].m_funct
 						    = fp;
-#endif /* !NO_MACRO */
-
 					return (mgwrap(fp, f, n));
 				}
 			}
@@ -226,10 +211,8 @@ rescan(int f, int n)
 			key.k_count = i;
 		}
 		if (fp != rescan && i >= key.k_count - 1) {
-#ifndef NO_MACRO
 			if (macrodef && macrocount <= MAXMACRO)
 				macro[macrocount - 1].m_funct = fp;
-#endif /* !NO_MACRO */
 			return (mgwrap(fp, f, n));
 		}
 	}
@@ -256,14 +239,12 @@ universal_argument(int f, int n)
 			key.k_chars[key.k_count++] = c = getkey(TRUE);
 		}
 		if (funct != universal_argument) {
-#ifndef NO_MACRO
 			if (macrodef && macrocount < MAXMACRO - 1) {
 				if (f & FFARG)
 					macrocount--;
 				macro[macrocount++].m_count = nn;
 				macro[macrocount++].m_funct = funct;
 			}
-#endif /* !NO_MACRO */
 			return (mgwrap(funct, FFUNIV, nn));
 		}
 		nn <<= 2;
@@ -292,7 +273,6 @@ digit_argument(int f, int n)
 	while ((funct = doscan(curmap, c, &curmap)) == NULL) {
 		key.k_chars[key.k_count++] = c = getkey(TRUE);
 	}
-#ifndef NO_MACRO
 	if (macrodef && macrocount < MAXMACRO - 1) {
 		if (f & FFARG)
 			macrocount--;
@@ -301,7 +281,6 @@ digit_argument(int f, int n)
 		macro[macrocount++].m_count = nn;
 		macro[macrocount++].m_funct = funct;
 	}
-#endif /* !NO_MACRO */
 	return (mgwrap(funct, FFOTHARG, nn));
 }
 
@@ -330,7 +309,6 @@ negative_argument(int f, int n)
 	while ((funct = doscan(curmap, c, &curmap)) == NULL) {
 		key.k_chars[key.k_count++] = c = getkey(TRUE);
 	}
-#ifndef NO_MACRO
 	if (macrodef && macrocount < MAXMACRO - 1) {
 		if (f & FFARG)
 			macrocount--;
@@ -339,7 +317,6 @@ negative_argument(int f, int n)
 		macro[macrocount++].m_count = nn;
 		macro[macrocount++].m_funct = funct;
 	}
-#endif /* !NO_MACRO */
 	return (mgwrap(funct, FFNEGARG, nn));
 }
 
@@ -350,9 +327,7 @@ negative_argument(int f, int n)
 int
 selfinsert(int f, int n)
 {
-#ifndef NO_MACRO
 	struct line	*lp;
-#endif /* !NO_MACRO */
 	int	 c;
 	int	 count;
 
@@ -361,7 +336,7 @@ selfinsert(int f, int n)
 	if (n == 0)
 		return (TRUE);
 	c = key.k_chars[key.k_count - 1];
-#ifndef NO_MACRO
+
 	if (macrodef && macrocount < MAXMACRO) {
 		if (f & FFARG)
 			macrocount -= 2;
@@ -393,7 +368,6 @@ selfinsert(int f, int n)
 		}
 		thisflag |= CFINS;
 	}
-#endif /* !NO_MACRO */
 	if (c == '\n') {
 		do {
 			count = lnewline();

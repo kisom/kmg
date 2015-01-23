@@ -1,4 +1,4 @@
-/*	$OpenBSD: dir.c,v 1.19 2008/06/13 20:07:40 kjell Exp $	*/
+/*	$OpenBSD: dir.c,v 1.27 2014/04/03 20:17:12 lum Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -8,6 +8,8 @@
  * Created:	Ron Flax (ron@vsedev.vse.com)
  *		Modified for MG 2a by Mic Kaczmarczik 03-Aug-1987
  */
+
+#include <sys/stat.h>
 
 #include "def.h"
 
@@ -22,9 +24,9 @@ dirinit(void)
 	mgcwd[0] = '\0';
 	if (getcwd(mgcwd, sizeof(mgcwd)) == NULL) {
 		ewprintf("Can't get current directory!");
-		/* gcc 4.3.2 insists on checking this. Not very likely I think. */
-		if (! chdir("/"))
-			ewprintf("I Can't even get / directory! o_O");
+		if (-1 == chdir("/")) {
+			ewprintf("Can't chdir to /!");
+		}
 	}
 	if (!(mgcwd[0] == '/' && mgcwd [1] == '\0'))
 		(void)strlcat(mgcwd, "/", sizeof(mgcwd));
@@ -47,6 +49,7 @@ changedir(int f, int n)
 		return (FALSE);
 	/* Append trailing slash */
 	if (chdir(bufc) == -1) {
+		dobeep();
 		ewprintf("Can't change dir to %s", bufc);
 		return (FALSE);
 	}
@@ -75,5 +78,101 @@ getcwdir(char *buf, size_t len)
 	if (strlcpy(buf, mgcwd, len) >= len)
 		return (FALSE);
 
+	return (TRUE);
+}
+
+/* Create the directory and it's parents. */
+/* ARGSUSED */
+int
+makedir(int f, int n)
+{
+	return (ask_makedir());
+}
+
+int
+ask_makedir(void)
+{
+
+	char		 bufc[NFILEN];
+	char		*path;
+
+	if (getbufcwd(bufc, sizeof(bufc)) != TRUE)
+		return (ABORT);
+	if ((path = eread("Make directory: ", bufc, NFILEN,
+	    EFDEF | EFNEW | EFCR | EFFILE)) == NULL)
+		return (ABORT);
+	else if (path[0] == '\0')
+		return (FALSE);
+
+	return (do_makedir(path));
+}
+
+int
+do_makedir(char *path)
+{
+	struct stat	 sb;
+	int		 finished, ishere;
+	mode_t		 dir_mode, mode, oumask;
+	char		*slash;
+
+	if ((path = adjustname(path, TRUE)) == NULL)
+		return (FALSE);
+
+	/* Remove trailing slashes */
+	slash = strrchr(path, '\0');
+	while (--slash > path && *slash == '/')
+		*slash = '\0';
+
+	slash = path;
+
+	oumask = umask(0);
+	mode = 0777 & ~oumask;
+	dir_mode = mode | S_IWUSR | S_IXUSR;
+
+	for (;;) {
+		slash += strspn(slash, "/");
+		slash += strcspn(slash, "/");
+
+		finished = (*slash == '\0');
+		*slash = '\0';
+
+		ishere = !stat(path, &sb);
+		if (finished && ishere) {
+			dobeep();
+			ewprintf("Cannot create directory %s: file exists",
+			     path);
+			return(FALSE);
+		} else if (!finished && ishere && S_ISDIR(sb.st_mode)) {
+			*slash = '/';
+			continue;
+		}
+
+		if (mkdir(path, finished ? mode : dir_mode) == 0) {
+			if (mode > 0777 && chmod(path, mode) < 0) {
+				umask(oumask);
+				return (ABORT);
+			}
+		} else {
+			if (!ishere || !S_ISDIR(sb.st_mode)) {
+				if (!ishere) {
+					dobeep();
+					ewprintf("Creating directory: "
+					    "permission denied, %s", path);
+				} else
+					eerase();
+
+				umask(oumask);
+				return (FALSE);
+			}
+		}
+
+		if (finished)
+			break;
+
+		*slash = '/';
+	}
+
+	eerase();
+	umask(oumask);
 	return (TRUE);
 }

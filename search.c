@@ -1,4 +1,4 @@
-/*	$OpenBSD: search.c,v 1.38 2011/01/21 19:10:13 kjell Exp $	*/
+/*	$OpenBSD: search.c,v 1.43 2014/03/20 07:47:29 lum Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -15,9 +15,7 @@
 
 #include <ctype.h>
 
-#ifndef NO_MACRO
 #include "macro.h"
-#endif /* !NO_MACRO */
 
 #define SRCH_BEGIN	(0)	/* Search sub-codes.	 */
 #define SRCH_FORW	(-1)
@@ -64,6 +62,7 @@ forwsearch(int f, int n)
 	if ((s = readpattern("Search")) != TRUE)
 		return (s);
 	if (forwsrch() == FALSE) {
+		dobeep();
 		ewprintf("Search failed: \"%s\"", pat);
 		return (FALSE);
 	}
@@ -86,6 +85,7 @@ backsearch(int f, int n)
 	if ((s = readpattern("Search backward")) != TRUE)
 		return (s);
 	if (backsrch() == FALSE) {
+		dobeep();
 		ewprintf("Search failed: \"%s\"", pat);
 		return (FALSE);
 	}
@@ -104,6 +104,7 @@ searchagain(int f, int n)
 {
 	if (srch_lastdir == SRCH_FORW) {
 		if (forwsrch() == FALSE) {
+			dobeep();
 			ewprintf("Search failed: \"%s\"", pat);
 			return (FALSE);
 		}
@@ -111,11 +112,13 @@ searchagain(int f, int n)
 	}
 	if (srch_lastdir == SRCH_BACK) {
 		if (backsrch() == FALSE) {
+			dobeep();
 			ewprintf("Search failed: \"%s\"", pat);
 			return (FALSE);
 		}
 		return (TRUE);
 	}
+	dobeep();
 	ewprintf("No last search");
 	return (FALSE);
 }
@@ -175,12 +178,11 @@ isearch(int dir)
 	char		 opat[NPAT];
 	int		 cdotline;	/* Saved line number */
 
-#ifndef NO_MACRO
 	if (macrodef) {
+		dobeep();
 		ewprintf("Can't isearch in macro");
 		return (FALSE);
 	}
-#endif /* !NO_MACRO */
 	for (cip = 0; cip < NSRCH; cip++)
 		cmds[cip].s_code = SRCH_NOPR;
 
@@ -196,7 +198,7 @@ isearch(int dir)
 	is_prompt(dir, TRUE, success);
 
 	for (;;) {
-		update();
+		update(CMODE);
 
 		switch (c = getkey(FALSE)) {
 		case CCHR('['):
@@ -249,17 +251,21 @@ isearch(int dir)
 				ewprintf("Overwrapped I-search: %s", pat);
 				break;
 			}
-
 			is_lpush();
 			pptr = strlen(pat);
-			(void)forwchar(FFRAND, 1);
-			if (is_find(SRCH_FORW) != FALSE)
-				is_cpush(SRCH_MARK);
-			else {
-				(void)backchar(FFRAND, 1);
-				ttbeep();
-				success = FALSE;
-				ewprintf("Failed I-search: %s", pat);
+			if (forwchar(FFRAND, 1) == FALSE) {
+                                dobeep();
+                                success = FALSE;
+                                ewprintf("Failed I-search: %s", pat);
+			} else {
+				if (is_find(SRCH_FORW) != FALSE)
+					is_cpush(SRCH_MARK);
+				else {
+					(void)backchar(FFRAND, 1);
+					dobeep();
+					success = FALSE;
+					ewprintf("Failed I-search: %s", pat);
+				}
 			}
 			is_prompt(dir, pptr < 0, success);
 			break;
@@ -284,13 +290,17 @@ isearch(int dir)
 			}
 			is_lpush();
 			pptr = strlen(pat);
-			(void)backchar(FFRAND, 1);
-			if (is_find(SRCH_BACK) != FALSE)
-				is_cpush(SRCH_MARK);
-			else {
-				(void)forwchar(FFRAND, 1);
-				ttbeep();
-				success = FALSE;
+                        if (backchar(FFRAND, 1) == FALSE) {
+                                dobeep();
+                                success = FALSE;
+                        } else {
+				if (is_find(SRCH_BACK) != FALSE)
+					is_cpush(SRCH_MARK);
+				else {
+					(void)forwchar(FFRAND, 1);
+					dobeep();
+					success = FALSE;
+				}
 			}
 			is_prompt(dir, pptr < 0, success);
 			break;
@@ -318,7 +328,7 @@ isearch(int dir)
 					break;
 
 				if (pptr == NPAT - 1) {
-					ttbeep();
+					dobeep();
 					break;
 				}
 				firstc = 0;
@@ -331,7 +341,7 @@ isearch(int dir)
 				if (dir == SRCH_FORW) {
 					curwp->w_doto = cbo;
 					curwp->w_rflag |= WFMOVE;
-					update();
+					update(CMODE);
 				}
 			}
 			is_prompt(dir, pptr < 0, success);
@@ -369,7 +379,7 @@ isearch(int dir)
 			if (pptr == 0)
 				success = TRUE;
 			if (pptr == NPAT - 1)
-				ttbeep();
+				dobeep();
 			else {
 				pat[pptr++] = c;
 				pat[pptr] = '\0';
@@ -380,7 +390,7 @@ isearch(int dir)
 					is_cpush(c);
 				else {
 					success = FALSE;
-					ttbeep();
+					dobeep();
 					is_cpush(SRCH_ACCM);
 				}
 			} else
@@ -498,6 +508,7 @@ is_find(int dir)
 			}
 			return (TRUE);
 		}
+		dobeep();
 		ewprintf("bad call to is_find");
 		return (FALSE);
 	}
@@ -553,12 +564,11 @@ queryrepl(int f, int n)
 	int	plen;			/* length of found string	*/
 	char	news[NPAT], *rep;	/* replacement string		*/
 
-#ifndef NO_MACRO
 	if (macrodef) {
+		dobeep();
 		ewprintf("Can't query replace in macro");
 		return (FALSE);
 	}
-#endif /* !NO_MACRO */
 
 	if ((s = readpattern("Query replace")) != TRUE)
 		return (s);
@@ -577,7 +587,7 @@ queryrepl(int f, int n)
 	 */
 	while (forwsrch() == TRUE) {
 retry:
-		update();
+		update(CMODE);
 		switch (getkey(FALSE)) {
 		case 'y':
 		case ' ':
@@ -616,7 +626,7 @@ retry:
 	}
 stopsearch:
 	curwp->w_rflag |= WFFULL;
-	update();
+	update(CMODE);
 	if (rcnt == 1)
 		ewprintf("Replaced 1 occurrence");
 	else
@@ -645,7 +655,7 @@ replstr(int f, int n)
 
 	plen = strlen(pat);
 	while (forwsrch() == TRUE) {
-		update();
+		update(CMODE);
 		if (lreplace((RSIZE)plen, news) == FALSE)
 			return (FALSE);
 
@@ -653,7 +663,7 @@ replstr(int f, int n)
 	}
 
 	curwp->w_rflag |= WFFULL;
-	update();
+	update(CMODE);
 
 	if (rcnt == 1)
 		ewprintf("Replaced 1 occurrence");
@@ -735,7 +745,7 @@ backsrch(void)
 	struct line	*clp, *tlp;
 	int	 cbo, tbo, c, i, xcase = 0;
 	char	*epp, *pp;
-	int	 nline;
+	int	 nline, pline;
 
 	for (epp = &pat[0]; epp[1] != 0; ++epp);
 	clp = curwp->w_dotp;
@@ -760,6 +770,7 @@ backsrch(void)
 			tlp = clp;
 			tbo = cbo;
 			pp = epp;
+			pline = nline;
 			while (pp != &pat[0]) {
 				if (tbo == 0) {
 					tlp = lback(tlp);
@@ -772,8 +783,10 @@ backsrch(void)
 					c = CCHR('J');
 				else
 					c = lgetc(tlp, tbo);
-				if (eq(c, *--pp, xcase) == FALSE)
+				if (eq(c, *--pp, xcase) == FALSE) {
+					nline = pline;
 					goto fail;
+				}
 			}
 			curwp->w_dotp = tlp;
 			curwp->w_doto = tbo;

@@ -1,4 +1,4 @@
-/*	$OpenBSD: def.h,v 1.116 2011/01/23 00:45:03 kjell Exp $	*/
+/*	$OpenBSD: def.h,v 1.141 2014/04/03 20:17:12 lum Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -14,15 +14,7 @@
 #include	"ttydef.h"
 #include	"chrdef.h"
 
-#ifdef	NO_MACRO
-#ifndef NO_STARTUP
-#define NO_STARTUP		/* NO_MACRO implies NO_STARTUP */
-#endif
-#endif
-
-#ifndef _STDINT_H
-#include <stdint.h>
-#endif
+#include	"config.h"
 
 typedef int	(*PF)(int, int);	/* generally useful type */
 
@@ -46,6 +38,8 @@ typedef int	(*PF)(int, int);	/* generally useful type */
 #define FALSE	0		/* False, no, bad, etc.		 */
 #define TRUE	1		/* True, yes, good, etc.	 */
 #define ABORT	2		/* Death, ^G, abort, etc.	 */
+#define UERROR	3		/* User Error.			 */
+#define REVERT	4		/* Revert the buffer		 */
 
 #define KCLEAR	2		/* clear echo area		 */
 
@@ -112,6 +106,8 @@ typedef int	(*PF)(int, int);	/* generally useful type */
 #define KFORW	0x01		/* forward insert into kill ring */
 #define KBACK	0x02		/* Backwards insert into kill ring */
 #define KREG	0x04		/* This is a region-based kill */
+
+#define MAX_TOKEN 64
 
 /*
  * This structure holds the starting position
@@ -266,7 +262,6 @@ struct buffer {
 	char		 b_cwd[NFILEN]; /* working directory		 */
 	struct fileinfo	 b_fi;		/* File attributes		 */
 	struct undoq	 b_undo;	/* Undo actions list		 */
-	int		 b_undopos;	/* Where we were during last undo */
 	struct undo_rec *b_undoptr;
 	int		 b_dotline;	/* Line number of dot */
 	int		 b_markline;	/* Line number of mark */
@@ -342,6 +337,9 @@ void		 dirinit(void);
 int		 changedir(int, int);
 int		 showcwdir(int, int);
 int		 getcwdir(char *, size_t);
+int		 makedir(int, int);
+int		 do_makedir(char *);
+int		 ask_makedir(void);
 
 /* dired.c */
 struct buffer	*dired_(char *);
@@ -352,14 +350,13 @@ int		 filevisit(int, int);
 int		 filevisitalt(int, int);
 int		 filevisitro(int, int);
 int		 poptofile(int, int);
-struct buffer	*findbuffer(char *);
 int		 readin(char *);
 int		 insertfile(char *, char *, int);
 int		 filewrite(int, int);
 int		 filesave(int, int);
 int		 buffsave(struct buffer *);
 int		 makebkfile(int, int);
-int		 writeout(struct buffer *, char *);
+int		 writeout(FILE **, struct buffer *, char *);
 void		 upmodes(struct buffer *);
 size_t		 xbasename(char *, const char *, size_t);
 
@@ -421,17 +418,23 @@ int		 notmodified(int, int);
 int		 popbuftop(struct buffer *, int);
 int		 getbufcwd(char *, size_t);
 int		 checkdirty(struct buffer *);
+int		 revertbuffer(int, int);
+int		 dorevert(void);
+int		 diffbuffer(int, int);
+struct buffer	*findbuffer(char *);
 
 /* display.c */
 int		vtresize(int, int, int);
 void		vtinit(void);
 void		vttidy(void);
-void		update(void);
+void		update(int);
 int		linenotoggle(int, int);
+int		colnotoggle(int, int);
 
 /* echo.c X */
 void		 eerase(void);
 int		 eyorn(const char *);
+int		 eynorr(const char *);
 int		 eyesno(const char *);
 void		 ewprintf(const char *fmt, ...);
 char		*ereply(const char *, char *, size_t, ...);
@@ -440,12 +443,12 @@ int		 getxtra(struct list *, struct list *, int, int);
 void		 free_file_list(struct list *);
 
 /* fileio.c */
-int		 ffropen(const char *, struct buffer *);
-void		 ffstat(struct buffer *);
-int		 ffwopen(const char *, struct buffer *);
-int		 ffclose(struct buffer *);
-int		 ffputbuf(struct buffer *);
-int		 ffgetline(char *, int, int *);
+int		 ffropen(FILE **, const char *, struct buffer *);
+void		 ffstat(FILE *, struct buffer *);
+int		 ffwopen(FILE **, const char *, struct buffer *);
+int		 ffclose(FILE *, struct buffer *);
+int		 ffputbuf(FILE *, struct buffer *);
+int		 ffgetline(FILE *, char *, int, int *);
 int		 fbackupfile(const char *);
 char		*adjustname(const char *, int);
 char		*startupfile(char *);
@@ -454,6 +457,9 @@ struct list	*make_file_list(char *);
 int		 fisdir(const char *);
 int		 fchecktime(struct buffer *);
 int		 fupdstat(struct buffer *);
+int		 backuptohomedir(int, int);
+int		 toggleleavetmp(int, int);
+char		*expandtilde(const char *);
 
 /* kbd.c X */
 int		 do_meta(int, int);
@@ -499,10 +505,11 @@ int		 setmark(int, int);
 int		 clearmark(int, int);
 int		 swapmark(int, int);
 int		 gotoline(int, int);
+int		 setlineno(int);
 
 /* random.c X */
 int		 showcpos(int, int);
-int		 getcolpos(void);
+int		 getcolpos(struct mgwin *);
 int		 twiddle(int, int);
 int		 openline(int, int);
 int		 newline(int, int);
@@ -518,6 +525,27 @@ int		 backdel(int, int);
 int		 space_to_tabstop(int, int);
 int		 backtoindent(int, int);
 int		 joinline(int, int);
+
+/* tags.c X */
+int		 findtag(int, int);
+int 		 poptag(int, int);
+int		 tagsvisit(int, int);
+int		 curtoken(int, int, char *);
+
+/* cscope.c */
+int		cssymbol(int, int);
+int		csdefinition(int, int);
+int		csfuncalled(int, int);
+int		cscallerfuncs(int, int);
+int		csfindtext(int, int);
+int		csegrep(int, int);
+int		csfindfile(int, int);
+int		csfindinc(int, int);
+int		csnextfile(int, int);
+int		csnextmatch(int, int);
+int		csprevfile(int, int);
+int		csprevmatch(int, int);
+int		cscreatelist(int, int);
 
 /* extend.c X */
 int		 insert(int, int);
@@ -566,6 +594,11 @@ int		 prefixregion(int, int);
 int		 setprefix(int, int);
 int		 region_get_data(struct region *, char *, int);
 void		 region_put_data(const char *, int);
+int		 markbuffer(int, int);
+int		 piperegion(int, int);
+int		 shellcommand(int, int);
+int		 pipeio(const char * const, char * const[], char * const, int,
+		     struct buffer *);
 
 /* search.c X */
 int		 forwsearch(int, int);
@@ -591,12 +624,10 @@ int		 showmatch(int, int);
 /* version.c X */
 int		 showversion(int, int);
 
-#ifndef NO_MACRO
 /* macro.c X */
 int		 definemacro(int, int);
 int		 finishmacro(int, int);
 int		 executemacro(int, int);
-#endif	/* !NO_MACRO */
 
 /* modes.c X */
 int		 indentmode(int, int);
@@ -640,8 +671,6 @@ int		 auto_execute(int, int);
 PF		*find_autoexec(const char *);
 int		 add_autoexec(const char *, const char *);
 
-/* mail.c X */
-void		 mail_init(void);
 /* cmode.c X */
 int		 cmode(int, int);
 int		 cc_brace(int, int);
@@ -654,6 +683,12 @@ int		 cc_lfindent(int, int);
 int		 next_error(int, int);
 int		 globalwdtoggle(int, int);
 int		 compile(int, int);
+
+/* bell.c */
+void		 bellinit(void);
+int		 toggleaudiblebell(int, int);
+int		 togglevisiblebell(int, int);
+void		 dobeep(void);
 
 /*
  * Externals.
@@ -678,7 +713,9 @@ extern int		 ttbot;
 extern int		 tthue;
 extern int		 defb_nmodes;
 extern int		 defb_flag;
-extern const char	 cinfo[];
+extern int		 doaudiblebell;
+extern int		 dovisiblebell;
+extern char	 	 cinfo[];
 extern char		*keystrings[];
 extern char		 pat[NPAT];
 #ifndef NO_DPROMPT
