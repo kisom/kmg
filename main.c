@@ -47,10 +47,14 @@ main(int argc, char **argv)
 	PF		 init_fcn = NULL;
 	int	 	 o, i, nfiles;
 	int	  	 nobackups = 0;
+	int		 b = 0;
 	struct buffer	*bp = NULL;
 
-	while ((o = getopt(argc, argv, "nf:")) != -1)
+	while ((o = getopt(argc, argv, "bnf:")) != -1)
 		switch (o) {
+		case 'b':
+			b = 1;
+			break;
 		case 'n':
 			nobackups = 1;
 			break;
@@ -136,6 +140,7 @@ main(int argc, char **argv)
 			if (argv[i][1] == '\0' || errstr != NULL)
 				goto notnum;
 			startrow = lval;
+			gotoline(FFARG, lval);
 		} else {
 notnum:
 			cp = adjustname(argv[i], FALSE);
@@ -160,7 +165,8 @@ notnum:
 		}
 	}
 
-	if (nfiles > 2)
+	/* only show buffers if last buffer flag and multiple files */
+	if (nfiles > 2 && b)
 		listbuffers(0, 1);
 
 	/* fake last flags */
