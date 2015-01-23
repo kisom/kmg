@@ -1,8 +1,7 @@
-/*	$OpenBSD: funmap.c,v 1.34 2011/01/18 16:25:40 kjell Exp $	*/
+/*	$OpenBSD: funmap.c,v 1.47 2013/05/31 18:03:44 lum Exp $	*/
 
 /* This file is in the public domain */
 
-#include "config.h"
 #include "def.h"
 #include "kbd.h"
 #include "funmap.h"
@@ -21,13 +20,13 @@ struct funmap {
 static struct funmap *funs;
 
 static struct funmap functnames[] = {
-#ifndef	NO_HELP
 	{apropos_command, "apropos",},
-#endif /* !NO_HELP */
-	{auto_execute, "auto-execute", },
+	{toggleaudiblebell, "audible-bell",},
+	{auto_execute, "auto-execute",},
 	{fillmode, "auto-fill-mode",},
 	{indentmode, "auto-indent-mode",},
 	{backtoindent, "back-to-indentation",},
+	{backuptohomedir, "backup-to-home-directory",},
 	{backchar, "backward-char",},
 	{delbword, "backward-kill-word",},
 	{gotobop, "backward-paragraph",},
@@ -38,66 +37,73 @@ static struct funmap functnames[] = {
 	{bsmap, "bsmap-mode",},
 	{NULL, "c-x 4 prefix",},
 	{NULL, "c-x prefix",},
-#ifndef NO_MACRO
 	{executemacro, "call-last-kbd-macro",},
-#endif /* !NO_MACRO */
 	{capword, "capitalize-word",},
 	{changedir, "cd",},
 	{clearmark, "clear-mark",},
+	{colnotoggle, "column-number-mode",},
 	{copyregion, "copy-region-as-kill",},
 #ifdef	REGEX
 	{cntmatchlines, "count-matches",},
 	{cntnonmatchlines, "count-non-matches",},
 #endif /* REGEX */
+	{cscreatelist, "cscope-create-list-of-files-to-index",},
+	{csfuncalled, "cscope-find-called-functions",},
+	{csegrep, "cscope-find-egrep-pattern",},
+	{csfindinc, "cscope-find-files-including-file",},
+	{cscallerfuncs, "cscope-find-functions-calling-this-function",},
+	{csdefinition, "cscope-find-global-definition",},
+	{csfindfile, "cscope-find-this-file",},
+	{cssymbol, "cscope-find-this-symbol",},
+	{csfindtext, "cscope-find-this-text-string",},
+	{csnextfile, "cscope-next-file",},
+	{csnextmatch, "cscope-next-symbol",},
+	{csprevfile, "cscope-prev-file",},
+	{csprevmatch, "cscope-prev-symbol",},
 	{redefine_key, "define-key",},
 	{backdel, "delete-backward-char",},
 	{deblank, "delete-blank-lines",},
 	{forwdel, "delete-char",},
 	{delwhite, "delete-horizontal-space",},
 	{delleadwhite, "delete-leading-space",},
-	{deltrailwhite, "delete-trailing-space",},
 #ifdef	REGEX
 	{delmatchlines, "delete-matching-lines",},
 	{delnonmatchlines, "delete-non-matching-lines",},
 #endif /* REGEX */
 	{onlywind, "delete-other-windows",},
+	{deltrailwhite, "delete-trailing-space",},
 	{delwind, "delete-window",},
-#ifndef NO_HELP
 	{wallchart, "describe-bindings",},
 	{desckey, "describe-key-briefly",},
-#endif /* !NO_HELP */
+	{diffbuffer, "diff-buffer-with-file",},
 	{digit_argument, "digit-argument",},
 	{lowerregion, "downcase-region",},
 	{lowerword, "downcase-word",},
 	{showversion, "emacs-version",},
-#ifndef NO_MACRO
 	{finishmacro, "end-kbd-macro",},
-#endif /* !NO_MACRO */
-	{globalwdtoggle, "global-wd-mode",},
 	{gotoeob, "end-of-buffer",},
 	{gotoeol, "end-of-line",},
 	{enlargewind, "enlarge-window",},
 	{NULL, "esc prefix",},
-#ifndef NO_STARTUP
 	{evalbuffer, "eval-current-buffer",},
 	{evalexpr, "eval-expression",},
-#endif /* !NO_STARTUP */
 	{swapmark, "exchange-point-and-mark",},
 	{extend, "execute-extended-command",},
 	{fillpara, "fill-paragraph",},
-	{filevisit, "find-file",},
-	{filevisitro, "find-file-read-only",},
 	{filevisitalt, "find-alternate-file",},
+	{filevisit, "find-file",},
 	{poptofile, "find-file-other-window",},
+	{filevisitro, "find-file-read-only",},
+	{findtag, "find-tag",},
 	{forwchar, "forward-char",},
 	{gotoeop, "forward-paragraph",},
 	{forwword, "forward-word",},
 	{bindtokey, "global-set-key",},
 	{unbindtokey, "global-unset-key",},
+	{globalwdtoggle, "global-wd-mode",},
 	{gotoline, "goto-line",},
-#ifndef NO_HELP
 	{help_help, "help-help",},
-#endif /* !NO_HELP */
+	{indent, "indent-current-line",},
 	{insert, "insert",},
 	{bufferinsert, "insert-buffer",},
 	{fileinsert, "insert-file",},
@@ -112,19 +118,19 @@ static struct funmap functnames[] = {
 	{killpara, "kill-paragraph",},
 	{killregion, "kill-region",},
 	{delfword, "kill-word",},
+	{toggleleavetmp, "leave-tmpdir-backups",},
 	{linenotoggle, "line-number-mode",},
 	{listbuffers, "list-buffers",},
-#ifndef NO_STARTUP
 	{evalfile, "load",},
-#endif /* !NO_STARTUP */
 	{localbind, "local-set-key",},
 	{localunbind, "local-unset-key",},
 	{makebkfile, "make-backup-files",},
+	{makedir, "make-directory",},
+	{markbuffer, "mark-whole-buffer",},
 	{do_meta, "meta-key-mode",},	/* better name, anyone? */
 	{negative_argument, "negative-argument",},
 	{newline, "newline",},
 	{lfindent, "newline-and-indent",},
-	{indent, "indent-current-line",},
 	{forwline, "next-line",},
 #ifdef NOTAB
 	{notabmode, "no-tab-mode",},
@@ -133,6 +139,7 @@ static struct funmap functnames[] = {
 	{openline, "open-line",},
 	{nextwind, "other-window",},
 	{overwrite_mode, "overwrite-mode",},
+	{poptag, "pop-tag-mark",},
 	{prefixregion, "prefix-region",},
 	{backline, "previous-line",},
 	{prevwind, "previous-window",},
@@ -140,7 +147,6 @@ static struct funmap functnames[] = {
 	{showcwdir, "pwd",},
 	{queryrepl, "query-replace",},
 #ifdef REGEX
-	{replstr, "replace-string",},
 	{re_queryrepl, "query-replace-regexp",},
 #endif /* REGEX */
 	{quote, "quoted-insert",},
@@ -151,6 +157,10 @@ static struct funmap functnames[] = {
 #endif /* REGEX */
 	{reposition, "recenter",},
 	{redraw, "redraw-display",},
+#ifdef REGEX
+	{replstr, "replace-string",},
+#endif /* REGEX */
+	{revertbuffer, "revert-buffer",},
 	{filesave, "save-buffer",},
 	{quit, "save-buffers-kill-emacs",},
 	{savebuffers, "save-some-buffers",},
@@ -170,27 +180,29 @@ static struct funmap functnames[] = {
 	{setfillcol, "set-fill-column",},
 	{setmark, "set-mark-command",},
 	{setprefix, "set-prefix-string",},
+	{shellcommand, "shell-command",},
+	{piperegion, "shell-command-on-region",},
 	{shrinkwind, "shrink-window",},
 #ifdef NOTAB
 	{space_to_tabstop, "space-to-tabstop",},
 #endif /* NOTAB */
 	{splitwind, "split-window-vertically",},
-#ifndef NO_MACRO
 	{definemacro, "start-kbd-macro",},
-#endif /* !NO_MACRO */
 	{spawncli, "suspend-emacs",},
 	{usebuffer, "switch-to-buffer",},
 	{poptobuffer, "switch-to-buffer-other-window",},
 	{togglereadonly, "toggle-read-only" },
 	{twiddle, "transpose-chars",},
-	{undo, "undo", },
-	{undo_enable, "undo-enable", },
-	{undo_boundary_enable, "undo-boundary-toggle", },
-	{undo_add_boundary, "undo-boundary", },
-	{undo_dump, "undo-list", },
+	{undo, "undo",},
+	{undo_add_boundary, "undo-boundary",},
+	{undo_boundary_enable, "undo-boundary-toggle",},
+	{undo_enable, "undo-enable",},
+	{undo_dump, "undo-list",},
 	{universal_argument, "universal-argument",},
 	{upperregion, "upcase-region",},
 	{upperword, "upcase-word",},
+	{togglevisiblebell, "visible-bell",},
+	{tagsvisit, "visit-tags-table",},
 	{showcpos, "what-cursor-position",},
 	{filewrite, "write-file",},
 	{yank, "yank",},

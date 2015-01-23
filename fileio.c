@@ -661,7 +661,7 @@ backuptohomedir(int f, int n)
 
 /*
  * For applications that use mg as the editor and have a desire to keep
- * '~' files in the TMPDIR, toggle the location: /tmp | ~/.mg.d
+ * '~' files in the TMPDIR, toggle the location: /tmp | ~/.kmg.d
  */
 int
 toggleleavetmp(int f, int n)
