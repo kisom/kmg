@@ -230,7 +230,7 @@ Status Line
 At the bottom of your screen is a reverse highlighted line. This is the status
 line and lets you know some useful information about the file you're editing.
 
-On the status line, you should see "Mg: tutorial". This lets you know that 
+On the status line, you should see "KMg: tutorial". This lets you know that 
 you're editing a file named "tutorial". If you've edited this file and not 
 saved it, it should have a "**" to the left of those words. If this file is 
 read-only, you should see a "%%" to the left of those words. 

@@ -9,7 +9,7 @@
 
 #include "def.h"
 
-const char	version[] = "Mg 2a";
+const char	version[] = "KMg 2a";
 
 /*
  * Display the version. All this does
