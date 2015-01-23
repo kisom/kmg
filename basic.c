@@ -1,4 +1,4 @@
-/*	$OpenBSD: basic.c,v 1.30 2009/06/04 02:23:37 kjell Exp $	*/
+/*	$OpenBSD: basic.c,v 1.42 2014/03/20 07:47:29 lum Exp $	*/
 
 /* This file is in the public domain */
 
@@ -43,8 +43,10 @@ backchar(int f, int n)
 	while (n--) {
 		if (curwp->w_doto == 0) {
 			if ((lp = lback(curwp->w_dotp)) == curbp->b_headp) {
-				if (!(f & FFRAND))
+				if (!(f & FFRAND)) {
+					dobeep();
 					ewprintf("Beginning of buffer");
+				}
 				return (FALSE);
 			}
 			curwp->w_dotp = lp;
@@ -85,8 +87,10 @@ forwchar(int f, int n)
 			curwp->w_dotp = lforw(curwp->w_dotp);
 			if (curwp->w_dotp == curbp->b_headp) {
 				curwp->w_dotp = lback(curwp->w_dotp);
-				if (!(f & FFRAND))
+				if (!(f & FFRAND)) {
+					dobeep();
 					ewprintf("End of buffer");
+				}
 				return (FALSE);
 			}
 			curwp->w_doto = 0;
@@ -115,17 +119,30 @@ gotobob(int f, int n)
 }
 
 /*
- * Go to the end of the buffer.
- * Setting WFFULL is conservative, but
- * almost always the case.
+ * Go to the end of the buffer. Leave dot 3 lines from the bottom of the
+ * window if buffer length is longer than window length; same as emacs.
+ * Setting WFFULL is conservative, but almost always the case.
  */
 int
 gotoeob(int f, int n)
 {
+	struct line	*lp;
+	
 	(void) setmark(f, n);
 	curwp->w_dotp = blastlp(curbp);
 	curwp->w_doto = llength(curwp->w_dotp);
 	curwp->w_dotline = curwp->w_bufp->b_lines;
+
+	lp = curwp->w_dotp;
+	n = curwp->w_ntrows - 3;
+
+	if (n < curwp->w_bufp->b_lines && n >= 3) {
+		while (n--)
+			curwp->w_dotp = lback(curwp->w_dotp);
+
+		curwp->w_linep = curwp->w_dotp;
+		curwp->w_dotp = lp;
+	}
 	curwp->w_rflag |= WFFULL;
 	return (TRUE);
 }
@@ -145,8 +162,13 @@ forwline(int f, int n)
 
 	if (n < 0)
 		return (backline(f | FFRAND, -n));
-	if ((dlp = curwp->w_dotp) == curbp->b_headp)
+	if ((dlp = curwp->w_dotp) == curbp->b_headp) {
+		if (!(f & FFRAND)) {
+			dobeep();
+			ewprintf("End of buffer");
+		}
 		return(TRUE);
+	}
 	if ((lastflag & CFCPCN) == 0)	/* Fix goal. */
 		setgoal();
 	thisflag |= CFCPCN;
@@ -158,6 +180,10 @@ forwline(int f, int n)
 			curwp->w_dotp = lback(dlp);
 			curwp->w_doto = llength(curwp->w_dotp);
 			curwp->w_rflag |= WFMOVE;
+			if (!(f & FFRAND)) {
+				dobeep();
+				ewprintf("End of buffer");
+			}
 			return (TRUE);
 		}
 		curwp->w_dotline++;
@@ -188,9 +214,20 @@ backline(int f, int n)
 		setgoal();
 	thisflag |= CFCPCN;
 	dlp = curwp->w_dotp;
+	if (lback(dlp) == curbp->b_headp)  {
+		if (!(f & FFRAND)) {
+			dobeep();
+			ewprintf("Beginning of buffer");
+		}
+		return(TRUE);
+	}
 	while (n-- && lback(dlp) != curbp->b_headp) {
 		dlp = lback(dlp);
 		curwp->w_dotline--;
+	}
+	if (n > 0 && !(f & FFRAND)) {
+		dobeep();
+		ewprintf("Beginning of buffer");
 	}
 	curwp->w_dotp = dlp;
 	curwp->w_doto = getgoal(dlp);
@@ -206,7 +243,7 @@ backline(int f, int n)
 void
 setgoal(void)
 {
-	curgoal = getcolpos();		/* Get the position. */
+	curgoal = getcolpos(curwp);	/* Get the position. */
 	/* we can now display past end of display, don't chop! */
 }
 
@@ -266,16 +303,23 @@ forwpage(int f, int n)
 			n = 1;			/* if tiny window.	 */
 	} else if (n < 0)
 		return (backpage(f | FFRAND, -n));
+
 	lp = curwp->w_linep;
-	while (n-- && lforw(lp) != curbp->b_headp) {
-		lp = lforw(lp);
-	}
+	while (n--)
+		if ((lp = lforw(lp)) == curbp->b_headp) {
+			dobeep();
+			ewprintf("End of buffer");
+			return(TRUE);
+		}
+
 	curwp->w_linep = lp;
 	curwp->w_rflag |= WFFULL;
+
 	/* if in current window, don't move dot */
 	for (n = curwp->w_ntrows; n-- && lp != curbp->b_headp; lp = lforw(lp))
 		if (lp == curwp->w_dotp)
 			return (TRUE);
+
 	/* Advance the dot the slow way, for line nos */
 	while (curwp->w_dotp != curwp->w_linep) {
 		curwp->w_dotp = lforw(curwp->w_dotp);
@@ -297,26 +341,38 @@ forwpage(int f, int n)
 int
 backpage(int f, int n)
 {
-	struct line  *lp;
+	struct line  *lp, *lp2;
 
 	if (!(f & FFARG)) {
 		n = curwp->w_ntrows - 2;	/* Default scroll.	 */
 		if (n <= 0)			/* Don't blow up if the  */
-			n = 1;			/* window is tiny.	 */
+			return (backline(f, 1));/* window is tiny.	 */
 	} else if (n < 0)
 		return (forwpage(f | FFRAND, -n));
-	lp = curwp->w_linep;
+
+	lp = lp2 = curwp->w_linep;
+
 	while (n-- && lback(lp) != curbp->b_headp) {
 		lp = lback(lp);
 	}
+	if (lp == curwp->w_linep) {
+		dobeep();
+		ewprintf("Beginning of buffer");
+	}
 	curwp->w_linep = lp;
 	curwp->w_rflag |= WFFULL;
+
 	/* if in current window, don't move dot */
 	for (n = curwp->w_ntrows; n-- && lp != curbp->b_headp; lp = lforw(lp))
 		if (lp == curwp->w_dotp)
 			return (TRUE);
+
+        lp2 = lforw(lp2);
+
 	/* Move the dot the slow way, for line nos */
-	while (curwp->w_dotp != curwp->w_linep) {
+	while (curwp->w_dotp != lp2) {
+                if (curwp->w_dotline <= curwp->w_ntrows)
+                        return (TRUE);
 		curwp->w_dotp = lback(curwp->w_dotp);
 		curwp->w_dotline--;
 	}
@@ -360,6 +416,7 @@ pagenext(int f, int n)
 	struct mgwin *wp;
 
 	if (wheadp->w_wndp == NULL) {
+		dobeep();
 		ewprintf("No other window");
 		return (FALSE);
 	}
@@ -426,6 +483,7 @@ swapmark(int f, int n)
 	int odoto, odotline;
 
 	if (curwp->w_markp == NULL) {
+		dobeep();
 		ewprintf("No mark in this window");
 		return (FALSE);
 	}
@@ -453,7 +511,6 @@ swapmark(int f, int n)
 int
 gotoline(int f, int n)
 {
-	struct line  *clp;
 	char   buf[32], *bufp;
 	const char *err;
 
@@ -465,10 +522,22 @@ gotoline(int f, int n)
 			return (ABORT);
 		n = (int)strtonum(buf, INT_MIN, INT_MAX, &err);
 		if (err) {
+			dobeep();
 			ewprintf("Line number %s", err);
 			return (FALSE);
 		}
 	}
+	return(setlineno(n));
+}
+
+/*
+ * Set the line number and switch to it.
+ */
+int
+setlineno(int n)
+{
+	struct line  *clp;
+
 	if (n >= 0) {
 		if (n == 0)
 			n++;

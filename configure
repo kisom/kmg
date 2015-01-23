@@ -103,6 +103,7 @@ else
     echo 'Not Found, adding.'
     add_inc HAVE_NOSTRTONUM
     extraobjs="$extraobjs strtonum.o"
+    need_lbsd=true
 fi
 
 
@@ -117,7 +118,8 @@ if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
 else
     echo 'Not Found, adding.'
     add_inc HAVE_NOSTRLCPY
-    extraobjs="$extraobjs strlcpy.o"
+    #extraobjs="$extraobjs strlcpy.o"
+    need_lbsd=true
 fi
 
 note 'strlcat'
@@ -131,7 +133,8 @@ if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
 else
     echo 'Not Found, adding.'
     add_inc HAVE_NOSTRLCAT
-    extraobjs="$extraobjs strlcat.o"
+    #extraobjs="$extraobjs strlcat.o"
+    need_lbsd=true
 fi
 
 note 'fgetln'
@@ -226,6 +229,11 @@ fi
 # Suppress DLL auto-import error when linking on Cygwin
 if uname -s | grep -q '^CYGWIN' ; then
     extralibs="$extralibs -Wl,--enable-auto-import -Wno-char-subscripts"
+fi
+
+if [ ! -z "$need_lbsd" ]; then
+    extralibs="$extralibs -lbsd"
+    extraflags="-DUSELIBBSD"
 fi
 
 

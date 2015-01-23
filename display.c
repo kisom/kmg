@@ -1,4 +1,4 @@
-/*	$OpenBSD: display.c,v 1.37 2009/06/04 02:23:37 kjell Exp $	*/
+/*	$OpenBSD: display.c,v 1.41 2013/05/31 18:03:44 lum Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -68,7 +68,7 @@ void	vtpute(int);
 int	vtputs(const char *);
 void	vteeol(void);
 void	updext(int, int);
-void	modeline(struct mgwin *);
+void	modeline(struct mgwin *, int);
 void	setscores(int, int);
 void	traceback(int, int, int, int);
 void	ucopy(struct video *, struct video *);
@@ -105,6 +105,7 @@ struct score *score;			/* [NROW * NROW] */
 #define LINENOMODE TRUE
 #endif /* !LINENOMODE */
 static int	 linenos = LINENOMODE;
+static int	 colnos = FALSE;
 
 /* Is macro recording enabled? */
 extern int macrodef;
@@ -123,6 +124,20 @@ linenotoggle(int f, int n)
 		linenos = n > 0;
 	else
 		linenos = !linenos;
+
+	sgarbf = TRUE;
+
+	return (TRUE);
+}
+
+/* ARGSUSED */
+int
+colnotoggle(int f, int n)
+{
+	if (f & FFARG)
+		colnos = n > 0;
+	else
+		colnos = !colnos;
 
 	sgarbf = TRUE;
 
@@ -388,7 +403,7 @@ vteeol(void)
  * virtual and physical screens the same.
  */
 void
-update(void)
+update(int modelinecolor)
 {
 	struct line	*lp;
 	struct mgwin	*wp;
@@ -408,7 +423,7 @@ update(void)
 			wp = wp->w_wndp;
 		}
 	}
-	if (linenos) {
+	if (linenos || colnos) {
 		wp = wheadp;
 		while (wp != NULL) {
 			wp->w_rflag |= WFMODE;
@@ -488,7 +503,7 @@ update(void)
 			}
 		}
 		if ((wp->w_rflag & WFMODE) != 0)
-			modeline(wp);
+			modeline(wp, modelinecolor);
 		wp->w_rflag = 0;
 		wp->w_frame = 0;
 	}
@@ -781,7 +796,7 @@ uline(int row, struct video *vvp, struct video *pvp)
  * characters may never be seen.
  */
 void
-modeline(struct mgwin *wp)
+modeline(struct mgwin *wp, int modelinecolor)
 {
 	int	n, md;
 	struct buffer *bp;
@@ -789,7 +804,7 @@ modeline(struct mgwin *wp)
 	int len;
 
 	n = wp->w_toprow + wp->w_ntrows;	/* Location.		 */
-	vscreen[n]->v_color = CMODE;		/* Mode line color.	 */
+	vscreen[n]->v_color = modelinecolor;	/* Mode line color.	 */
 	vscreen[n]->v_flag |= (VFCHG | VFHBAD);	/* Recompute, display.	 */
 	vtmove(n, 0);				/* Seek to right line.	 */
 	bp = wp->w_bufp;
@@ -834,12 +849,15 @@ modeline(struct mgwin *wp)
 	vtputc(')');
 	++n;
 
-	if (linenos) {
+	if (linenos && colnos)
 		len = snprintf(sl, sizeof(sl), "--L%d--C%d", wp->w_dotline,
-		    getcolpos());
-		if (len < sizeof(sl) && len != -1)
-			n += vtputs(sl);
-	}
+		    getcolpos(wp));
+	else if (linenos)
+		len = snprintf(sl, sizeof(sl), "--L%d", wp->w_dotline);
+	else if (colnos)
+		len = snprintf(sl, sizeof(sl), "--C%d", getcolpos(wp));
+	if ((linenos || colnos) && len < sizeof(sl) && len != -1)
+		n += vtputs(sl);
 
 	while (n < ncol) {			/* Pad out.		 */
 		vtputc('-');

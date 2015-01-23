@@ -1,4 +1,4 @@
-/* $OpenBSD: undo.c,v 1.50 2010/06/30 19:12:54 oga Exp $ */
+/* $OpenBSD: undo.c,v 1.55 2014/03/20 07:47:29 lum Exp $ */
 /*
  * This file is in the public domain
  */
@@ -41,6 +41,7 @@ find_dot(struct line *lp, int off)
 	for (p = curbp->b_headp; p != lp; p = lforw(p)) {
 		if (count != 0) {
 			if (p == curbp->b_headp) {
+				dobeep();
 				ewprintf("Error: Undo stuff called with a"
 				    "nonexistent line");
 				return (FALSE);
@@ -239,7 +240,13 @@ undo_add_boundary(int f, int n)
 void
 undo_add_modified(void)
 {
-	struct undo_rec *rec;
+	struct undo_rec *rec, *trec;
+
+	TAILQ_FOREACH_SAFE(rec, &curbp->b_undo, next, trec)
+		if (rec->type == MODIFIED) {
+			TAILQ_REMOVE(&curbp->b_undo, rec, next);
+			free_undo_record(rec);
+		}
 
 	rec = new_undo_record();
 	rec->type = MODIFIED;
@@ -384,7 +391,8 @@ undo_dump(int f, int n)
 		return (FALSE);
 	bp->b_flag |= BFREADONLY;
 	bclear(bp);
-	popbuf(bp, WNONE);
+	if ((wp = popbuf(bp, WNONE)) == NULL)
+		return (FALSE);
 
 	for (wp = wheadp; wp != NULL; wp = wp->w_wndp) {
 		if (wp->w_bufp == bp) {
@@ -414,10 +422,17 @@ undo_dump(int f, int n)
 		}
 		snprintf(tmp, sizeof(tmp), " [%d]", rec->region.r_size);
 		if (strlcat(buf, tmp, sizeof(buf)) >= sizeof(buf)) {
+			dobeep();
 			ewprintf("Undo record too large. Aborted.");
 			return (FALSE);
 		}
 		addlinef(bp, "%s", buf);
+	}
+	for (wp = wheadp; wp != NULL; wp = wp->w_wndp) {
+		if (wp->w_bufp == bp) {
+			wp->w_dotline = num+1;
+			wp->w_rflag |= WFFULL;
+		}
 	}
 	return (TRUE);
 }
@@ -464,14 +479,12 @@ undo(int f, int n)
 	struct undo_rec	*ptr, *nptr;
 	int		 done, rval;
 	struct line	*lp;
-	int		 offset, save, dot;
+	int		 offset, save;
 	static int	 nulled = FALSE;
 	int		 lineno;
 
 	if (n < 0)
 		return (FALSE);
-
-	dot = find_dot(curwp->w_dotp, curwp->w_doto);
 
 	ptr = curbp->b_undoptr;
 
@@ -496,6 +509,7 @@ undo(int f, int n)
 		 * its creation.
 		 */
 		if (ptr == NULL) {
+			dobeep();
 			ewprintf("No further undo information");
 			rval = FALSE;
 			nulled = TRUE;
@@ -525,6 +539,7 @@ undo(int f, int n)
 			if (ptr->type != BOUNDARY && ptr->type != MODIFIED) {
 				if (find_lo(ptr->pos, &lp,
 				    &offset, &lineno) == FALSE) {
+					dobeep();
 					ewprintf("Internal error in Undo!");
 					rval = FALSE;
 					break;
@@ -573,13 +588,8 @@ undo(int f, int n)
 
 		ewprintf("Undo!");
 	}
-	/*
-	 * Record where we are. (we have to save our new position at the end
-	 * since we change the dot when undoing....)
-	 */
-	curbp->b_undoptr = ptr;
 
-	curbp->b_undopos = find_dot(curwp->w_dotp, curwp->w_doto);
+	curbp->b_undoptr = ptr;
 
 	return (rval);
 }

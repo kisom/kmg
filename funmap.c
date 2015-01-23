@@ -2,6 +2,7 @@
 
 /* This file is in the public domain */
 
+#include "config.h"
 #include "def.h"
 #include "kbd.h"
 #include "funmap.h"

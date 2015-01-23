@@ -1,4 +1,4 @@
-/*	$OpenBSD: buffer.c,v 1.77 2011/01/23 00:45:03 kjell Exp $	*/
+/*	$OpenBSD: buffer.c,v 1.94 2014/06/12 16:29:41 bcallah Exp $	*/
 
 /* This file is in the public domain. */
 
@@ -6,13 +6,17 @@
  *		Buffer handling.
  */
 
-#include "libgen.h"
-#include <stdarg.h>
-
 #include "def.h"
 #include "kbd.h"		/* needed for modes */
 
-static struct buffer *makelist(void);
+#include <libgen.h>
+#include <stdarg.h>
+
+#ifndef DIFFTOOL
+#define DIFFTOOL "/usr/bin/diff"
+#endif /* !DIFFTOOL */
+
+static struct buffer  *makelist(void);
 static struct buffer *bnew(const char *);
 
 static int usebufname(const char *);
@@ -31,7 +35,7 @@ togglereadonly(int f, int n)
 	if (!(curbp->b_flag & BFREADONLY))
 		curbp->b_flag |= BFREADONLY;
 	else {
-		curbp->b_flag &=~ BFREADONLY;
+		curbp->b_flag &= ~BFREADONLY;
 		if (curbp->b_flag & BFCHG)
 			ewprintf("Warning: Buffer was modified");
 	}
@@ -120,10 +124,10 @@ poptobuffer(int f, int n)
 
 /*
  * Dispose of a buffer, by name.
- * Ask for the name. Look it up (don't get too
- * upset if it isn't there at all!). Clear the buffer (ask
+ * Ask for the name (unless called by dired mode). Look it up (don't
+ * get too upset if it isn't there at all!). Clear the buffer (ask
  * if the buffer has been changed). Then free the header
- * line and the buffer header. Bound to "C-X k".
+ * line and the buffer header. Bound to "C-x k".
  */
 /* ARGSUSED */
 int
@@ -132,7 +136,9 @@ killbuffer_cmd(int f, int n)
 	struct buffer *bp;
 	char    bufn[NBUFN], *bufp;
 
-	if ((bufp = eread("Kill buffer: (default %s) ", bufn, NBUFN,
+	if (f & FFRAND) /* dired mode 'q' */
+		bp = curbp;
+	else if ((bufp = eread("Kill buffer: (default %s) ", bufn, NBUFN,
 	    EFNUL | EFNEW | EFBUF, curbp->b_bname)) == NULL)
 		return (ABORT);
 	else if (bufp[0] == '\0')
@@ -149,7 +155,7 @@ killbuffer(struct buffer *bp)
 	struct buffer *bp2;
 	struct mgwin  *wp;
 	int s;
-	struct undo_rec *rec, *next;
+	struct undo_rec *rec;
 
 	/*
 	 * Find some other buffer to display. Try the alternate buffer,
@@ -200,12 +206,10 @@ killbuffer(struct buffer *bp)
 			bp1->b_altb = (bp->b_altb == bp1) ? NULL : bp->b_altb;
 		bp1 = bp1->b_bufp;
 	}
-	rec = TAILQ_FIRST(&bp->b_undo);
 
-	while (rec != NULL) {
-		next = TAILQ_NEXT(rec, next);
+	while ((rec = TAILQ_FIRST(&bp->b_undo))) {
+		TAILQ_REMOVE(&bp->b_undo, rec, next);
 		free_undo_record(rec);
-		rec = next;
 	}
 
 	free(bp->b_bname);			/* Release name block	 */
@@ -368,6 +372,7 @@ listbuf_goto_buffer_helper(int f, int n, int only)
 	int		 i, ret = FALSE;
 
 	if (curwp->w_dotp->l_text[listbuf_ncol/2 - 1] == '$') {
+		dobeep();
 		ewprintf("buffer name truncated");
 		return (FALSE);
 	}
@@ -449,24 +454,27 @@ int
 anycb(int f)
 {
 	struct buffer	*bp;
-	int		 s = FALSE, save = FALSE, ret;
+	int		 s = FALSE, save = FALSE, save2 = FALSE, ret;
 	char		 pbuf[NFILEN + 11];
 
 	for (bp = bheadp; bp != NULL; bp = bp->b_bufp) {
-		if (bp->b_fname != NULL && *(bp->b_fname) != '\0' &&
-		    (bp->b_flag & BFCHG) != 0) {
+		if (*(bp->b_fname) != '\0' && (bp->b_flag & BFCHG) != 0) {
 			ret = snprintf(pbuf, sizeof(pbuf), "Save file %s",
 			    bp->b_fname);
 			if (ret < 0 || ret >= sizeof(pbuf)) {
+				dobeep();
 				ewprintf("Error: filename too long!");
-				return (ABORT);
+				return (UERROR);
 			}
 			if ((f == TRUE || (save = eyorn(pbuf)) == TRUE) &&
-			    buffsave(bp) == TRUE) {
+			    (save2 = buffsave(bp)) == TRUE) {
 				bp->b_flag &= ~BFCHG;
 				upmodes(bp);
-			} else
+			} else {
+				if (save2 == FIOERR)
+					return (save2);
 				s = TRUE;
+			}
 			if (save == ABORT)
 				return (save);
 			save = TRUE;
@@ -516,6 +524,7 @@ bnew(const char *bname)
 
 	bp = calloc(1, sizeof(struct buffer));
 	if (bp == NULL) {
+		dobeep();
 		ewprintf("Can't get %d bytes", sizeof(struct buffer));
 		return (NULL);
 	}
@@ -540,7 +549,6 @@ bnew(const char *bname)
 	bp->b_nmodes = defb_nmodes;
 	TAILQ_INIT(&bp->b_undo);
 	bp->b_undoptr = NULL;
-	memset(&bp->b_undopos, 0, sizeof(bp->b_undopos));
 	i = 0;
 	do {
 		bp->b_modes[i] = defb_modes[i];
@@ -555,6 +563,7 @@ bnew(const char *bname)
 	bp->b_dotline = bp->b_markline = 1;
 	bp->b_lines = 1;
 	if ((bp->b_bname = strdup(bname)) == NULL) {
+		dobeep();
 		ewprintf("Can't get %d bytes", strlen(bname) + 1);
 		return (NULL);
 	}
@@ -611,8 +620,6 @@ showbuffer(struct buffer *bp, struct mgwin *wp, int flags)
 
 	if (wp->w_bufp == bp) {	/* Easy case! */
 		wp->w_rflag |= flags;
-		wp->w_dotp = bp->b_dotp;
-		wp->w_doto = bp->b_doto;
 		return (TRUE);
 	}
 	/* First, detach the old buffer from the window */
@@ -665,12 +672,8 @@ augbname(char *bn, const char *fn, size_t bs)
 {
 	int	 count;
 	size_t	 remain, len;
-	char    *fntmp;
 
-	fntmp = strdup(fn);
-	len = strlcpy(bn, basename(fntmp), bs);
-	free(fntmp);
-	if (len >= bs)
+	if ((len = xbasename(bn, fn, bs)) >= bs)
 		return (FALSE);
 
 	remain = bs - len;
@@ -745,6 +748,7 @@ bufferinsert(int f, int n)
 		return (FALSE);
 
 	if (bp == curbp) {
+		dobeep();
 		ewprintf("Cannot insert buffer into self");
 		return (FALSE);
 	}
@@ -796,10 +800,8 @@ notmodified(int f, int n)
 	return (TRUE);
 }
 
-#ifndef NO_HELP
 /*
- * Popbuf and set all windows to top of buffer.	 Currently only used by
- * help functions.
+ * Popbuf and set all windows to top of buffer.
  */
 int
 popbuftop(struct buffer *bp, int flags)
@@ -818,7 +820,6 @@ popbuftop(struct buffer *bp, int flags)
 	}
 	return (popbuf(bp, flags) != NULL);
 }
-#endif
 
 /*
  * Return the working directory for the current buffer, terminated
@@ -857,13 +858,184 @@ checkdirty(struct buffer *bp)
 {
 	int s;
 
+	if ((bp->b_flag & (BFCHG | BFDIRTY)) == 0)
+		if (fchecktime(bp) != TRUE)
+			bp->b_flag |= BFDIRTY;
+
 	if ((bp->b_flag & (BFDIRTY | BFIGNDIRTY)) == BFDIRTY) {
-		if ((s = eyorn("File changed on disk; really edit the buffer"))
-		    != TRUE)
+		s = eynorr("File changed on disk; really edit the buffer");
+		switch (s) {
+		case TRUE:
+			bp->b_flag &= ~BFDIRTY;
+			bp->b_flag |= BFIGNDIRTY;
+			return (TRUE);
+		case REVERT:
+			dorevert();
+			return (FALSE);
+		default:
 			return (s);
-		bp->b_flag &= ~BFDIRTY;
-		bp->b_flag |= BFIGNDIRTY;
+		}
 	}
 
 	return (TRUE);
+}
+
+/*
+ * Revert the current buffer to whatever is on disk.
+ */
+/* ARGSUSED */
+int
+revertbuffer(int f, int n)
+{
+	char fbuf[NFILEN + 32];
+
+	if (curbp->b_fname[0] == 0) {
+		dobeep();
+		ewprintf("Cannot revert buffer not associated with any files.");
+		return (FALSE);
+	}
+
+	snprintf(fbuf, sizeof(fbuf), "Revert buffer from file %s",
+	    curbp->b_fname);
+
+	if (eyorn(fbuf) == TRUE)
+		return dorevert();
+
+	return (FALSE);
+}
+
+int
+dorevert(void)
+{
+	int lineno;
+	struct undo_rec *rec;
+
+	if (access(curbp->b_fname, F_OK|R_OK) != 0) {
+		dobeep();
+		if (errno == ENOENT)
+			ewprintf("File %s no longer exists!",
+			    curbp->b_fname);
+		else
+			ewprintf("File %s is no longer readable!",
+			    curbp->b_fname);
+		return (FALSE);
+	}
+
+	/* Save our current line, so we can go back after reloading. */
+	lineno = curwp->w_dotline;
+
+	/* Prevent readin from asking if we want to kill the buffer. */
+	curbp->b_flag &= ~BFCHG;
+
+	/* Clean up undo memory */
+	while ((rec = TAILQ_FIRST(&curbp->b_undo))) {
+		TAILQ_REMOVE(&curbp->b_undo, rec, next);
+		free_undo_record(rec);
+	}
+
+	if (readin(curbp->b_fname))
+		return(setlineno(lineno));
+	return (FALSE);
+}
+
+/*
+ * Diff the current buffer to what is on disk.
+ */
+/*ARGSUSED */
+int
+diffbuffer(int f, int n)
+{
+	struct buffer	*bp;
+	struct line	*lp, *lpend;
+	size_t		 len;
+	int		 ret;
+	char		*text, *ttext;
+	char		* const argv[] =
+	    {DIFFTOOL, "-u", "-p", curbp->b_fname, "-", (char *)NULL};
+
+	len = 0;
+
+	/* C-u is not supported */
+	if (n > 1)
+		return (ABORT);
+
+	if (access(DIFFTOOL, X_OK) != 0) {
+		dobeep();
+		ewprintf("%s not found or not executable.", DIFFTOOL);
+		return (FALSE);
+	}
+
+	if (curbp->b_fname[0] == 0) {
+		dobeep();
+		ewprintf("Cannot diff buffer not associated with any files.");
+		return (FALSE);
+	}
+
+	lpend = curbp->b_headp;
+	for (lp = lforw(lpend); lp != lpend; lp = lforw(lp)) {
+		len+=llength(lp);
+		if (lforw(lp) != lpend)		/* no implied \n on last line */
+			len++;
+	}
+	if ((text = calloc(len + 1, sizeof(char))) == NULL) {
+		dobeep();
+		ewprintf("Cannot allocate memory.");
+		return (FALSE);
+	}
+	ttext = text;
+
+	for (lp = lforw(lpend); lp != lpend; lp = lforw(lp)) {
+		if (llength(lp) != 0) {
+			memcpy(ttext, ltext(lp), llength(lp));
+			ttext += llength(lp);
+		}
+		if (lforw(lp) != lpend)		/* no implied \n on last line */
+			*ttext++ = '\n';
+	}
+
+	bp = bfind("*Diff*", TRUE);
+	bp->b_flag |= BFREADONLY;
+	if (bclear(bp) != TRUE) {
+		free(text);
+		return (FALSE);
+	}
+
+	ret = pipeio(DIFFTOOL, argv, text, len, bp);
+
+	if (ret == TRUE) {
+		eerase();
+		if (lforw(bp->b_headp) == bp->b_headp)
+			addline(bp, "Diff finished (no differences).");
+	}
+
+	free(text);
+	return (ret);
+}
+
+/*
+ * Given a file name, either find the buffer it uses, or create a new
+ * empty buffer to put it in.
+ */
+struct buffer *
+findbuffer(char *fn)
+{
+	struct buffer	*bp;
+	char		bname[NBUFN], fname[NBUFN];
+
+	if (strlcpy(fname, fn, sizeof(fname)) >= sizeof(fname)) {
+		dobeep();
+		ewprintf("filename too long");
+		return (NULL);
+	}
+
+	for (bp = bheadp; bp != NULL; bp = bp->b_bufp) {
+		if (strcmp(bp->b_fname, fname) == 0)
+			return (bp);
+	}
+	/* Not found. Create a new one, adjusting name first */
+	if (augbname(bname, fname, sizeof(bname)) == FALSE)
+		return (NULL);
+
+	bp = bfind(bname, TRUE);
+	return (bp);
 }
