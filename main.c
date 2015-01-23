@@ -35,7 +35,7 @@ extern void     closetags(void);
 static void
 usage()
 {
-	fprintf(stderr, "usage: %s [-n] [-f mode] [+number] [file ...]\n",
+	fprintf(stderr, "usage: %s [-b] [-n] [-f mode] [+number] [file ...]\n",
 	    __progname);
 	exit(1);
 }
@@ -145,7 +145,7 @@ main(int argc, char **argv)
 notnum:
 			cp = adjustname(argv[i], FALSE);
 			if (cp != NULL) {
-				if (nfiles == 1)
+				if (nfiles == 1 && b)
 					splitwind(0, 1);
 
 				if ((curbp = findbuffer(cp)) == NULL) {
