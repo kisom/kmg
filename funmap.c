@@ -207,6 +207,7 @@ static struct funmap functnames[] = {
 	{filewrite, "write-file",},
 	{yank, "yank",},
 	{goimports, "goimports",},
+	{gobuild, "gobuild",},
 	{NULL, NULL,}
 };
 

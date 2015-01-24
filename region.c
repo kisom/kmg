@@ -28,7 +28,6 @@ static	int	iomux(int, char * const, int, struct buffer *);
 static	int	preadin(int, struct buffer *);
 static	void	pwriteout(int, char **, int *);
 static	int	setsize(struct region *, RSIZE);
-static	int	shellcmdoutput(char * const[], char * const, int);
 
 /*
  * Kill the region.  Ask "getregion" to figure out the bounds of the region.
@@ -446,7 +445,7 @@ piperegion(int f, int n)
 
 	region_get_data(&region, text, len);
 
-	return shellcmdoutput(argv, text, len);
+	return shellcmdoutput(argv, text, len, 0);
 }
 
 /*
@@ -469,12 +468,12 @@ shellcommand(int f, int n)
 
 	argv[2] = cmd;
 
-	return shellcmdoutput(argv, NULL, 0);
+	return shellcmdoutput(argv, NULL, 0, 0);
 }
 
 
 int
-shellcmdoutput(char* const argv[], char* const text, int len)
+shellcmdoutput(char* const argv[], char* const text, int len, int noout)
 {
 
 	struct buffer *bp;
@@ -494,10 +493,15 @@ shellcmdoutput(char* const argv[], char* const text, int len)
 
 	if (ret == TRUE) {
 		eerase();
-		if (lforw(bp->b_headp) == bp->b_headp)
-			addline(bp, "(Shell command succeeded with no output)");
+		if (lforw(bp->b_headp) == bp->b_headp) {
+			if (!noout) {
+				addline(bp, "(Shell command succeeded with no output)");
+			} else {
+				killbuffer(bp);
+				onlywind(0, 0);
+			}
+		}
 	}
-
 	free(text);
 	return (ret);
 }
