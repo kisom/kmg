@@ -60,6 +60,27 @@ static PF cCsc[] = {
 	csfindtext		/* t */
 };
 
+static PF cCgc[] = {
+	gobuild,		/* b */
+	rescan,			/* c */
+	rescan,			/* d */
+	rescan,			/* e */
+	rescan,			/* f */
+	rescan,			/* g */
+	rescan,			/* h */
+	rescan,			/* i */
+	rescan,			/* j */
+	rescan,			/* k */
+	rescan,			/* l */
+	rescan,			/* m */
+	rescan,			/* n */
+	rescan,			/* o */
+	rescan,			/* p */
+	rescan,			/* q */
+	rescan,			/* r */
+	goimports		/* s */
+};
+
 static struct KEYMAPE (1 + IMAPEXT) cCsmap = {
 	1,
 	1 + IMAPEXT,
@@ -71,17 +92,35 @@ static struct KEYMAPE (1 + IMAPEXT) cCsmap = {
 	}
 };
 
+static struct KEYMAPE (1 + IMAPEXT) cCgmap = {
+	1,
+	1 + IMAPEXT,
+	rescan,
+	{
+		{
+			'b', 's', cCgc, NULL
+		}
+	}
+};
+
 static PF cCs[] = {
 	NULL			/* s */
 };
 
-struct KEYMAPE (2 + IMAPEXT) ccmap = {
-	2,
-	2 + IMAPEXT,
+static PF cCg[] = {
+	NULL			/* g */
+};
+
+struct KEYMAPE (3 + IMAPEXT) ccmap = {
+	3,
+	3 + IMAPEXT,
 	rescan,
 	{
 		{
 			CCHR('@'), CCHR('@'), (PF[]){ rescan }, NULL
+		},
+		{
+			'g', 'g', cCg, (KEYMAP *) & cCgmap
 		},
 		{
 			's', 's', cCs, (KEYMAP *) & cCsmap
