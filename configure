@@ -246,6 +246,8 @@ fi
 if [ ! -z "$need_lbsd" ]; then
     extralibs="$extralibs -lbsd"
     extraflags="$extraflags -DUSELIBBSD"
+else
+    extralibs="-lutil"
 fi
 
 if [ "$(uname -s)" != "darwin" ]; then
