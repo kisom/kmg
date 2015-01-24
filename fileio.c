@@ -581,13 +581,19 @@ fchecktime(struct buffer *bp)
 	if (stat(bp->b_fname, &sb) == -1)
 		return (TRUE);
 
+#ifdef STAT_TIMESPEC
+        if (bp->b_fi.fi_mtime != sb.st_mtimespec.tv_sec ||
+            bp->b_fi.fi_mtime != sb.st_mtimespec.tv_nsec)
+#else
 	if (bp->b_fi.fi_mtime != sb.st_mtime ||
 	    bp->b_fi.fi_mtime != sb.st_mtim.tv_sec)
+#endif
 		return (FALSE);
 
 	return (TRUE);
 
 }
+
 
 /*
  * Location of backup file. This function creates the correct path.

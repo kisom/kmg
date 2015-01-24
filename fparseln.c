@@ -1,3 +1,4 @@
+#ifdef USELIBBSD
 /*	$OpenBSD: fparseln.c,v 1.7 2012/12/05 23:20:06 deraadt Exp $	*/
 /*	$NetBSD: fparseln.c,v 1.7 1999/07/02 15:49:12 simonb Exp $	*/
 
@@ -212,3 +213,4 @@ line 6
 */
 
 #endif /* TEST */
+#endif

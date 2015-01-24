@@ -20,6 +20,13 @@
 #include "def.h"
 
 #define TIMEOUT 10000
+#ifndef MSG_NOSIGNAL
+#ifdef SO_NOSIGPIPE
+#define MSG_NOSIGNAL SO_NOSIGPIPE
+#else
+#error No flag found to prevent generating SIGPIPE.
+#endif
+#endif
 
 static char leftover[BUFSIZ];
 

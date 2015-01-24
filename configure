@@ -73,7 +73,7 @@ if ${CC:-gcc} testfile.c -o testfile 2>&3; then
     echo Found.
     add_inc HAVE_ARC4RANDOM
 else
-    echo Not Found.
+    echo Not found.
     note 'external arc4random'
     cat << EOF > testfile.c
 #include <stdlib.h>
@@ -86,26 +86,38 @@ EOF
 	add_inc HAVE_ARC4RANDOM_EXT
 	extralibs="$extralibs -larc4random"
     else
-	echo Not Found.
+	echo Not found.
     fi
+fi
+
+note 'stat(2) has timespec'
+cat << EOF > testfile.c
+#include <sys/stat.h>
+int main(void)
+{struct stat sb; return sb.st_mtimespec.tv_sec;}
+EOF
+if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
+    echo 'stat(2) has timespec.'
+    add_inc STAT_TIMESPEC
+else
+    echo 'stat(2) does not have timespec.'
 fi
 
 note 'strtonum'
 cat << EOF > testfile.c
 #include <stdlib.h>
 #include <limits.h>
+#include <sys/stat.h>
 int main(void)
 {strtonum(NULL, 1, 1, NULL);return 0;}
 EOF
 if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
     echo 'Found.'
 else
-    echo 'Not Found, adding.'
+    echo 'Not found, adding.'
     add_inc HAVE_NOSTRTONUM
     extraobjs="$extraobjs strtonum.o"
-    need_lbsd=true
 fi
-
 
 note 'strlcpy'
 cat << EOF > testfile.c
@@ -116,7 +128,7 @@ EOF
 if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
     echo 'Found.'
 else
-    echo 'Not Found, adding.'
+    echo 'Not found, adding.'
     add_inc HAVE_NOSTRLCPY
     #extraobjs="$extraobjs strlcpy.o"
     need_lbsd=true
@@ -131,7 +143,7 @@ EOF
 if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
     echo 'Found.'
 else
-    echo 'Not Found, adding.'
+    echo 'Not found, adding.'
     add_inc HAVE_NOSTRLCAT
     #extraobjs="$extraobjs strlcat.o"
     need_lbsd=true
@@ -146,7 +158,7 @@ EOF
 if ${CC:-gcc} -Wall testfile.c -o testfile 2>&3; then
     echo 'Found.'
 else
-    echo 'Not Found, adding.'
+    echo 'Not found, adding.'
     add_inc HAVE_NOFGETLN
     extraobjs="$extraobjs fgetln.o"
 fi
