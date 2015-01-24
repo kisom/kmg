@@ -690,6 +690,9 @@ int		 toggleaudiblebell(int, int);
 int		 togglevisiblebell(int, int);
 void		 dobeep(void);
 
+/* gofuncs.c */
+int		 goimports(int, int);
+
 /*
  * Externals.
  */
