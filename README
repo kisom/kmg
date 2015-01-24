@@ -6,12 +6,18 @@ I started with the 2011 source code in the Ubuntu 14.04 repo, and
 began porting over code until I had M-! and backup-to-home-directory
 working.
 
-Plans for this include C-c g to enable a series of Go functions:
+This also includes the following functions for Go programming:
 
-	* C-c g b	go-build
-	* C-c g B	go-build-tree
-	* C-c g i	goimports
-	* C-c g l	golint
+	C-c g a       go-build-all
+	C-c g b       go-build
+	C-c g c       go-test-cover
+	C-c g e       go-install-all
+	C-c g i       go-install
+	C-c g r       go-test-all
+	C-c g s       goimports
+	C-c g t       go-test
+
+If this system is not built on Darwin, it will be compiled statically.
 
 The original README follows.
 
