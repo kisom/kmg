@@ -151,6 +151,29 @@ gotest(int f, int n)
 }
 
 int
+gotestall(int f, int n)
+{
+	char	  wd[NFILEN+1];
+	int	  rv = FALSE;
+
+	if (NULL == getcwd(wd, NFILEN)) {
+		ewprintf("Working directory is too long.");
+		return (FALSE);
+	} else if (-1 == chdir(curbp->b_cwd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+
+	ewprintf("Testing all subpackages...");
+	rv = callgocommand("go test ./...");
+	if (-1 == chdir(wd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+	return rv;
+}
+
+int
 goinstall(int f, int n)
 {
 	char	  wd[NFILEN+1];
