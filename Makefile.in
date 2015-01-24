@@ -22,20 +22,16 @@ LIBS= 		-lncurses
 INSTALL=	/usr/bin/install
 STRIP=		/usr/bin/strip
 
-SRCS=	autoexec.c basic.c bell.c buffer.c cinfo.c dir.c display.c \
-	echo.c extend.c file.c fileio.c help.c kbd.c keymap.c \
-	line.c macro.c main.c match.c modes.c paragraph.c random.c \
-	re_search.c region.c search.c spawn.c tty.c ttyio.c ttykbd.c \
-	undo.c version.c window.c word.c yank.c funmap.c gofuncs.c
+OBJS=	autoexec.o basic.o bell.o buffer.o cinfo.o dir.o display.o	\
+	echo.o extend.o file.o fileio.o help.o kbd.o keymap.o line.o	\
+	macro.o main.o match.o modes.o paragraph.o random.o re_search.o	\
+	region.o search.o spawn.o tty.o ttyio.o ttykbd.o undo.o		\
+	version.o window.o word.o yank.o funmap.o
 
 # ported from OpenBSD's libutil
-SRCS+=	fparseln.c
+OBJS+=	fparseln.o
 
-SRCS+=	cmode.c cscope.c dired.c grep.c tags.c theo.c
-
-OBJS=	$(patsubst %.c,%.o,$(SRCS))
-
-# OBJS+=	grep.o theo.o
+OBJS+=	cmode.o cscope.o dired.o grep.o tags.o theo.o gofuncs.o
 
 # # Portability stuff.
 CFLAGS+= 	@extraflags@
