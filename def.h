@@ -1,3 +1,4 @@
+
 /*	$OpenBSD: def.h,v 1.141 2014/04/03 20:17:12 lum Exp $	*/
 
 /* This file is in the public domain. */
@@ -597,6 +598,7 @@ void		 region_put_data(const char *, int);
 int		 markbuffer(int, int);
 int		 piperegion(int, int);
 int		 shellcommand(int, int);
+int		 shellcmdoutput(char * const[], char * const, int, int);
 int		 pipeio(const char * const, char * const[], char * const, int,
 		     struct buffer *);
 
@@ -689,6 +691,16 @@ void		 bellinit(void);
 int		 toggleaudiblebell(int, int);
 int		 togglevisiblebell(int, int);
 void		 dobeep(void);
+
+/* gofuncs.c */
+int		 gobuild(int, int);
+int		 gobuildall(int, int);
+int		 goimports(int, int);
+int		 gotest(int, int);
+int		 gotestcover(int, int);
+int		 gotestall(int, int);
+int		 goinstall(int, int);
+int		 goinstallall(int, int);
 
 /*
  * Externals.
