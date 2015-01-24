@@ -58,9 +58,6 @@ goimports(int f, int n)
 	return rv;
 }
 
-/*
- * gobuild attempts to build the package in the current directory.
- */
 int
 gobuild(int f, int n)
 {
@@ -75,6 +72,7 @@ gobuild(int f, int n)
 		return (FALSE);
 	}
 
+	ewprintf("Building package...");
 	rv = callgocommand("go build");
 	if (-1 == chdir(wd)) {
 		ewprintf("Failed to change directory.");
@@ -82,3 +80,119 @@ gobuild(int f, int n)
 	}
 	return rv;
 }
+
+int
+gobuildall(int f, int n)
+{
+	char	  wd[NFILEN+1];
+	int	  rv = FALSE;
+
+	if (NULL == getcwd(wd, NFILEN)) {
+		ewprintf("Working directory is too long.");
+		return (FALSE);
+	} else if (-1 == chdir(curbp->b_cwd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+
+	ewprintf("Building all subpackages...");
+	rv = callgocommand("go build ./...");
+	if (-1 == chdir(wd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+	return rv;
+}
+
+int
+gotestcover(int f, int n)
+{
+	char	  wd[NFILEN+1];
+	int	  rv = FALSE;
+
+	if (NULL == getcwd(wd, NFILEN)) {
+		ewprintf("Working directory is too long.");
+		return (FALSE);
+	} else if (-1 == chdir(curbp->b_cwd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+
+	ewprintf("Testing with code coverage...");
+	rv = callgocommand("go test -cover");
+	if (-1 == chdir(wd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+	return rv;
+}
+
+int
+gotest(int f, int n)
+{
+	char	  wd[NFILEN+1];
+	int	  rv = FALSE;
+
+	if (NULL == getcwd(wd, NFILEN)) {
+		ewprintf("Working directory is too long.");
+		return (FALSE);
+	} else if (-1 == chdir(curbp->b_cwd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+
+	ewprintf("Testing current package...");
+	rv = callgocommand("go test");
+	if (-1 == chdir(wd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+	return rv;
+}
+
+int
+goinstall(int f, int n)
+{
+	char	  wd[NFILEN+1];
+	int	  rv = FALSE;
+
+	if (NULL == getcwd(wd, NFILEN)) {
+		ewprintf("Working directory is too long.");
+		return (FALSE);
+	} else if (-1 == chdir(curbp->b_cwd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+
+	ewprintf("Installing current package...");
+	rv = callgocommand("go install ./...");
+	if (-1 == chdir(wd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+	return rv;
+}
+
+int
+goinstallall(int f, int n)
+{
+	char	  wd[NFILEN+1];
+	int	  rv = FALSE;
+
+	if (NULL == getcwd(wd, NFILEN)) {
+		ewprintf("Working directory is too long.");
+		return (FALSE);
+	} else if (-1 == chdir(curbp->b_cwd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+
+	ewprintf("Installing all subpackages...");
+	rv = callgocommand("go install ./...");
+	if (-1 == chdir(wd)) {
+		ewprintf("Failed to change directory.");
+		return (FALSE);
+	}
+	return rv;
+}
+

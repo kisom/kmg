@@ -206,8 +206,14 @@ static struct funmap functnames[] = {
 	{showcpos, "what-cursor-position",},
 	{filewrite, "write-file",},
 	{yank, "yank",},
+	{gobuild, "go-build",},
+	{gobuildall, "go-build-all",},
 	{goimports, "goimports",},
-	{gobuild, "gobuild",},
+	{gotest, "go-test",},
+	{gotestcover, "go-test-cover",},
+	{gotestall, "go-test-all",},
+	{goinstall, "go-install",},
+	{goinstallall, "go-install-all",},
 	{NULL, NULL,}
 };
 

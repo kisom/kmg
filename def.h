@@ -693,8 +693,14 @@ int		 togglevisiblebell(int, int);
 void		 dobeep(void);
 
 /* gofuncs.c */
-int		 goimports(int, int);
 int		 gobuild(int, int);
+int		 gobuildall(int, int);
+int		 goimports(int, int);
+int		 gotest(int, int);
+int		 gotestcover(int, int);
+int		 gotestall(int, int);
+int		 goinstall(int, int);
+int		 goinstallall(int, int);
 
 /*
  * Externals.

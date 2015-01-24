@@ -61,14 +61,15 @@ static PF cCsc[] = {
 };
 
 static PF cCgc[] = {
+	gobuildall,		/* a */
 	gobuild,		/* b */
-	rescan,			/* c */
+	gotestcover,		/* c */
 	rescan,			/* d */
-	rescan,			/* e */
+	goinstallall,		/* e */
 	rescan,			/* f */
 	rescan,			/* g */
 	rescan,			/* h */
-	rescan,			/* i */
+	goinstall,		/* i */
 	rescan,			/* j */
 	rescan,			/* k */
 	rescan,			/* l */
@@ -77,8 +78,9 @@ static PF cCgc[] = {
 	rescan,			/* o */
 	rescan,			/* p */
 	rescan,			/* q */
-	rescan,			/* r */
-	goimports		/* s */
+	gotestall,		/* r */
+	goimports,		/* s */
+	gotest			/* t */
 };
 
 static struct KEYMAPE (1 + IMAPEXT) cCsmap = {
@@ -98,7 +100,7 @@ static struct KEYMAPE (1 + IMAPEXT) cCgmap = {
 	rescan,
 	{
 		{
-			'b', 's', cCgc, NULL
+			'a', 't', cCgc, NULL
 		}
 	}
 };
