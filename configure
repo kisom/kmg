@@ -250,17 +250,13 @@ else
     extralibs="-lutil"
 fi
 
-if [ "$(uname -s)" != "darwin" ]; then
-    extraflags="$extraflags -static"
-fi
-
-
 rm testfile*
 
 sed -e "s|@extraflags@|$extraflags|" \
     -e "s|@extralibs@|$extralibs|" \
     -e "s|@extraobjs@|$extraobjs|" \
     -e "s|@exe_ext@|$exe_ext|" \
+    -e "s|@extraldflags@|$extraldflags|" \
     Makefile.in > Makefile
 
 echo "OK, now run \`make'."
